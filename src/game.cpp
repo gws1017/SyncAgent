@@ -64,8 +64,8 @@ const Talent kTalentDefs[3][TAL_COUNT] = {
 };
 
 void InitTalentsForClass(GameState& state) {
-    if (state.playerClass == CLASS_NONE) return;
     int idx = (int)state.playerClass - 1;
+    if (idx < 0 || idx >= 3) return; // CLASS_NONE이거나 손상된 값이면 건너뜀 (배열 범위 밖 접근 방지)
     for (int i = 0; i < TAL_COUNT; i++) {
         int savedLevel = state.talents[i].level;
         state.talents[i] = kTalentDefs[idx][i];
@@ -128,7 +128,34 @@ long long PlayerBaseDef(int stage) {
 }
 
 long long PlayerBaseMaxHp(int stage, int prestigeCount) {
-    return 200 + (long long)stage * 8 + (long long)prestigeCount * 20;
+    return 200 + (long long)stage * 8 + (long long)prestigeCount * PRESTIGE_HP_BONUS;
+}
+
+// 방어력 적용 — 비율 기반 감소(diminishing returns). defValue가 커질수록 감소율이
+// 100%에 가까워지지만 절대 0이 되지는 않아서, 투자를 아무리 많이 해도 몹 성장이
+// 계속 어느 정도의 위협으로 남는다 (반대로 적게 투자해도 너무 약하게 느껴지지 않음).
+long long MitigateDamage(long long incomingDmg, long long defValue) {
+    if (incomingDmg <= 0) return 0;
+    constexpr double DEF_K = 50.0; // 절반 감소가 되는 방어력 기준점
+    double reduction = (double)defValue / ((double)defValue + DEF_K);
+    return (long long)(incomingDmg * (1.0 - reduction));
+}
+
+// 스테이지에 따라 드랍 등급 분포가 달라짐 — 프레스티지 첫 해금 지점부터 희귀가
+// 섞이기 시작하고, 더 깊이 가면 영웅도 소량 나옴 (전설은 합성으로만 획득).
+static Grade RollDropGrade(int stage) {
+    std::uniform_int_distribution<int> roll(1, 100);
+    int r = roll(g_rng);
+    if (stage >= 40) {
+        if (r <= 5)  return Grade::Epic;
+        if (r <= 25) return Grade::Rare; // 5 + 20
+        return Grade::Common;
+    }
+    if (stage >= PRESTIGE_STAGE_REQ) {
+        if (r <= 20) return Grade::Rare;
+        return Grade::Common;
+    }
+    return Grade::Common;
 }
 
 // XP 곡선 — 지수 증가. 레벨이 오를수록 한 단계 올리는 데 필요한 경험치가 급격히 커져서
@@ -174,19 +201,31 @@ long long PrestigeRequirement(int prestigeCount) {
 }
 
 void DoPrestige(GameState& state) {
-    // 유지: 클래스, 장착 장비, 프레스티지 횟수
-    ClassType          cls      = state.playerClass;
+    // 유지: 장착 장비, 프레스티지 횟수, 위장 시간 기록. 클래스는 다시 선택하게 함
+    // (직업을 바꿔서 다른 빌드를 시도해볼 수 있도록).
     std::vector<Item>  equipped = state.inventory.equipped;
     int                pc       = state.prestigeCount + 1;
+    double             runSec   = state.totalRunSec;
+    double             dashSec  = state.dashboardOpenSec;
 
     state = GameState{};
     InitUpgrades(state);
 
-    state.playerClass          = cls;
-    InitTalentsForClass(state);
     state.inventory.equipped   = equipped;
     state.prestigeCount        = pc;
-    state.lastEvent            = L"[sync] 프레스티지 완료";
+    state.totalRunSec          = runSec;
+    state.dashboardOpenSec     = dashSec;
+    state.lastEvent            = L"[sync] 프레스티지 완료 — 직업을 다시 선택하세요";
+}
+
+void ResetGame(GameState& state) {
+    double runSec  = state.totalRunSec;
+    double dashSec = state.dashboardOpenSec;
+    state = GameState{};
+    InitUpgrades(state);
+    state.totalRunSec      = runSec;  // 위장 시간 기록은 세이브 초기화에도 유지
+    state.dashboardOpenSec = dashSec;
+    state.lastEvent        = L"[sync] 초기화 완료";
 }
 
 std::wstring GameTick(GameState& state) {
@@ -198,8 +237,8 @@ std::wstring GameTick(GameState& state) {
     float goldMult = 1.0f + state.upgrades[UP_GOLD].level  * state.upgrades[UP_GOLD].multiplier;
     float dropMult = 1.0f + state.upgrades[UP_DROP].level  * state.upgrades[UP_DROP].multiplier;
 
-    // 프레스티지 영구 보너스
-    float prestigeBonus = state.prestigeCount * 0.15f;
+    // 프레스티지 영구 보너스 (회당: XP/골드/드랍률 +15%, 공격력 +10%, 최대체력 +20 — game.h 상수 참고)
+    float prestigeBonus = state.prestigeCount * PRESTIGE_ECON_BONUS;
     xpMult   += prestigeBonus;
     goldMult += prestigeBonus;
     dropMult += prestigeBonus;
@@ -231,11 +270,12 @@ std::wstring GameTick(GameState& state) {
     // 투자(업그레이드/장비/프레스티지/특성)가 곱연산으로 얹힘 — 투자가 여전히 핵심.
     TalentBonuses tal = ComputeTalentBonuses(state);
     float atkMult = 1.0f + GetEquippedBonus(state.inventory, StatType::Attack)
-                         + state.prestigeCount * 0.10f
+                         + state.prestigeCount * PRESTIGE_ATK_BONUS
                          + state.upgrades[UP_ATK].level * state.upgrades[UP_ATK].multiplier
                          + tal.atkBonus;
-    float atkSpeedMult = 1.0f + GetEquippedBonus(state.inventory, StatType::AtkSpeed)
-                               + tal.atkSpeedBonus;
+    // 공격속도 — 데미지를 곱해 늘리는 게 아니라 "한 틱에 몇 번 때리는지"를 결정함.
+    // 정수 부분만큼 추가 공격이 확정되고, 소수 부분은 그 확률로 한 번 더 때림.
+    float atkSpeedBonus = GetEquippedBonus(state.inventory, StatType::AtkSpeed) + tal.atkSpeedBonus;
     long long baseAtk = (long long)(PlayerBaseAtk(state.dungeon.stage) * atkMult);
     long long totalDmg = 0;
     switch (state.playerClass) {
@@ -262,7 +302,13 @@ std::wstring GameTick(GameState& state) {
         totalDmg = baseAtk;
         break;
     }
-    totalDmg = (long long)(totalDmg * atkSpeedMult);
+    int numAttacks = 1 + (int)atkSpeedBonus; // 정수 부분 = 확정 추가 공격
+    float atkSpeedFrac = atkSpeedBonus - (float)(int)atkSpeedBonus;
+    if (atkSpeedFrac > 0.0f) {
+        std::uniform_real_distribution<float> spdRoll(0.0f, 1.0f);
+        if (spdRoll(g_rng) <= atkSpeedFrac) numAttacks++;
+    }
+    totalDmg *= numAttacks;
 
     // 기습(도적) — 포인트당 추가 공격 확률
     if (tal.extraAtkChance > 0.0f) {
@@ -276,9 +322,12 @@ std::wstring GameTick(GameState& state) {
 
     // 체력흡수 — 실제로 들어간 데미지 기준으로 회복 (장비 + 마법사 마력 순환)
     float lifestealPct = GetEquippedBonus(state.inventory, StatType::Lifesteal) + tal.lifestealBonus;
+    state.lastHealAmount = 0;
     if (totalDmg > 0 && lifestealPct > 0.0f) {
         long long heal = (long long)(totalDmg * lifestealPct);
+        long long before = state.playerHp;
         state.playerHp = std::min(maxHp, state.playerHp + heal);
+        state.lastHealAmount = state.playerHp - before; // 화면에 "+N 회복" 표시용
     }
 
     if (state.dungeon.enemyHp <= 0) {
@@ -303,7 +352,7 @@ std::wstring GameTick(GameState& state) {
     // 적 반격 — 방어력/체력흡수 투자가 부족하면 죽어서 전투가 리셋됨 (스테이지는 유지)
     long long playerDef = (long long)(PlayerBaseDef(state.dungeon.stage) * (1.0f + GetEquippedBonus(state.inventory, StatType::Defense) + tal.defenseBonus));
     long long enemyAtk   = EnemyAtkForStage(state.dungeon.stage);
-    long long dmgToPlayer = std::max(0LL, enemyAtk - playerDef);
+    long long dmgToPlayer = MitigateDamage(enemyAtk, playerDef);
     dmgToPlayer = (long long)(dmgToPlayer * (1.0f - std::min(0.9f, tal.evasionBonus))); // 은신 회피
     state.playerHp -= dmgToPlayer;
     if (state.playerHp <= 0) {
@@ -333,7 +382,7 @@ std::wstring GameTick(GameState& state) {
     int dropChance = (int)(6.0f * dropMult);
     std::uniform_int_distribution<int> roll(1, 100);
     if (roll(g_rng) <= dropChance) {
-        Item dropped = MakeItem(Grade::Common);
+        Item dropped = MakeItem(RollDropGrade(state.dungeon.stage));
         if ((int)state.inventory.items.size() < Inventory::MAX_ITEMS) {
             state.inventory.items.push_back(dropped);
         }
@@ -362,7 +411,7 @@ void SaveGame(const GameState& state) {
     fprintf(f, "%s\n", inv.c_str());
     fprintf(f, "%d ", state.talentPoints);
     for (int i = 0; i < TAL_COUNT; i++) fprintf(f, "%d ", state.talents[i].level);
-    fprintf(f, "\n");
+    fprintf(f, "\n%.0f %.0f\n", state.totalRunSec, state.dashboardOpenSec);
     fclose(f);
 }
 
@@ -376,6 +425,15 @@ void LoadGame(GameState& state) {
             fscanf(f, "%d", &state.upgrades[i].level);
         int cls = 0;
         fscanf(f, "%d%d%d", &state.dungeon.stage, &cls, &state.prestigeCount);
+        if (cls < CLASS_NONE || cls > CLASS_ROGUE) {
+            // 구버전 포맷의 세이브 등으로 필드가 밀려서 깨진 값이 들어온 경우 —
+            // 잘못된 클래스로 특성 테이블을 범위 밖으로 읽으면 크래시로 이어지므로
+            // 깨진 세이브는 폐기하고 새 게임으로 안전하게 시작한다.
+            state = GameState{};
+            InitUpgrades(state);
+            fclose(f);
+            return;
+        }
         state.playerClass = (ClassType)cls;
         InitTalentsForClass(state);
         char invBuf[4096] = {};
@@ -384,6 +442,11 @@ void LoadGame(GameState& state) {
         if (fscanf(f, "%d", &state.talentPoints) == 1) {
             for (int i = 0; i < TAL_COUNT; i++)
                 fscanf(f, "%d", &state.talents[i].level);
+        }
+        double runSec = 0.0, dashSec = 0.0;
+        if (fscanf(f, "%lf %lf", &runSec, &dashSec) == 2) {
+            state.totalRunSec      = runSec;
+            state.dashboardOpenSec = dashSec;
         }
     } else {
         state = GameState{};

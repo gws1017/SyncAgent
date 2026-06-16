@@ -84,7 +84,7 @@ static LRESULT CALLBACK DashWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 // ---- 클래스 선택 화면 -------------------------------------------------------
 static void ScreenClassSelect(GameState& state) {
     ImGui::Spacing();
-    ImGui::TextDisabled("직업을 선택하세요  (한 번 고르면 변경 불가)");
+    ImGui::TextDisabled("직업을 선택하세요  (프레스티지 전까지는 변경 불가)");
     ImGui::Separator();
     ImGui::Spacing();
 
@@ -116,6 +116,14 @@ static void ScreenClassSelect(GameState& state) {
 }
 
 // ---- 탭 UI 함수 ------------------------------------------------------------
+static void FormatDuration(double sec, char* buf, int bufSize) {
+    long long total = (long long)sec;
+    long long h = total / 3600;
+    long long m = (total % 3600) / 60;
+    if (h > 0) snprintf(buf, bufSize, "%lldh %lldm", h, m);
+    else       snprintf(buf, bufSize, "%lldm", m);
+}
+
 static void TabStatus(GameState& state) {
     ImGui::Spacing();
 
@@ -127,6 +135,17 @@ static void TabStatus(GameState& state) {
     ToUtf8(state.lastEvent, evt, sizeof(evt));
     ImGui::TextDisabled("최근 이벤트");
     ImGui::TextWrapped("%s", evt);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    char runBuf[32], dashBuf[32];
+    FormatDuration(state.totalRunSec, runBuf, sizeof(runBuf));
+    FormatDuration(state.dashboardOpenSec, dashBuf, sizeof(dashBuf));
+    ImGui::TextDisabled("위장 기록");
+    ImGui::Text("몰래 가동");    ImGui::SameLine(140); ImGui::Text("%s  (트레이에 숨어서 돈 시간)", runBuf);
+    ImGui::Text("대시보드 노출"); ImGui::SameLine(140); ImGui::Text("%s  (들킬 뻔한 시간)", dashBuf);
 }
 
 static void TabUpgrade(GameState& state) {
@@ -176,18 +195,37 @@ static void TabUpgrade(GameState& state) {
     ImGui::Separator();
     ImGui::Spacing();
 
-    ImGui::TextDisabled("프레스티지  (%d회 / 보너스 +%.0f%%)",
-                         state.prestigeCount, state.prestigeCount * 15.0f);
+    ImGui::TextDisabled("프레스티지  (%d회 진행)", state.prestigeCount);
+    ImGui::TextWrapped("회당 보너스: XP/골드/드랍률 +%.0f%%,  공격력 +%.0f%%,  최대체력 +%lld"
+                        "   (지금까지 %d회 × 위 수치 = 현재 적용 중인 총 보너스)",
+                        PRESTIGE_ECON_BONUS * 100.0f, PRESTIGE_ATK_BONUS * 100.0f, PRESTIGE_HP_BONUS,
+                        state.prestigeCount);
+    ImGui::TextDisabled("실행하면 레벨/골드/장비(보관함)/스테이지가 초기화되고 직업을 다시 고릅니다.");
     long long req = PrestigeRequirement(state.prestigeCount);
     bool canPrestige = state.dungeon.stage >= req;
     if (!canPrestige) ImGui::BeginDisabled();
-    if (ImGui::Button("프레스티지 실행 (레벨/골드/스테이지 초기화)", {320, 0})) {
+    if (ImGui::Button("프레스티지 실행", {320, 0})) {
         DoPrestige(state);
         SaveGame(state);
     }
     if (!canPrestige) ImGui::EndDisabled();
     if (!canPrestige)
         ImGui::TextDisabled("스테이지 %lld 이상 도달 시 해금", req);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    static bool confirmReset = false;
+    ImGui::TextDisabled("세이브 초기화");
+    ImGui::Checkbox("정말로 초기화할게요 (되돌릴 수 없음)", &confirmReset);
+    if (!confirmReset) ImGui::BeginDisabled();
+    if (ImGui::Button("세이브 초기화 실행", {320, 0})) {
+        ResetGame(state);
+        SaveGame(state);
+        confirmReset = false;
+    }
+    if (!confirmReset) ImGui::EndDisabled();
 }
 
 static void TabTalent(GameState& state) {
@@ -381,29 +419,35 @@ static void TabDungeon(GameState& state) {
 
     TalentBonuses tal = ComputeTalentBonuses(state);
     float atkMult = 1.0f + GetEquippedBonus(state.inventory, StatType::Attack)
-                         + state.prestigeCount * 0.10f
+                         + state.prestigeCount * PRESTIGE_ATK_BONUS
                          + state.upgrades[UP_ATK].level * state.upgrades[UP_ATK].multiplier
                          + tal.atkBonus;
-    float atkSpeedMult = 1.0f + GetEquippedBonus(state.inventory, StatType::AtkSpeed)
-                               + tal.atkSpeedBonus;
-    long long baseAtk = (long long)(PlayerBaseAtk(d.stage) * atkMult * atkSpeedMult);
+    // 공격속도는 데미지 배율이 아니라 "한 틱에 평균 몇 번 때리는지"를 나타냄 (game.cpp와 동일 모델)
+    float atkSpeedBonus = GetEquippedBonus(state.inventory, StatType::AtkSpeed) + tal.atkSpeedBonus;
+    float expectedAttacks = 1.0f + atkSpeedBonus;
+    long long baseAtk = (long long)(PlayerBaseAtk(d.stage) * atkMult);
     long long enemyDef = EnemyDefForStage(d.stage);
     long long enemyAtk = EnemyAtkForStage(d.stage);
     long long playerDef = (long long)(PlayerBaseDef(d.stage) * (1.0f + GetEquippedBonus(state.inventory, StatType::Defense) + tal.defenseBonus));
     float lifestealPct = GetEquippedBonus(state.inventory, StatType::Lifesteal) + tal.lifestealBonus;
-    long long dmgToPlayer = (std::max)(0LL, enemyAtk - playerDef);
+    long long dmgToPlayer = MitigateDamage(enemyAtk, playerDef);
     dmgToPlayer = (long long)(dmgToPlayer * (1.0f - (std::min)(0.9f, tal.evasionBonus)));
 
     ImGui::Text("적 방어력"); ImGui::SameLine(100); ImGui::Text("%lld", enemyDef);
     ImGui::Text("적 공격력"); ImGui::SameLine(100); ImGui::Text("%lld", enemyAtk);
     ImGui::Text("내 방어력"); ImGui::SameLine(100); ImGui::Text("%lld", playerDef);
+    if (atkSpeedBonus > 0.0f) {
+        ImGui::Text("공격속도"); ImGui::SameLine(100); ImGui::Text("평균 %.2f회 / 틱", expectedAttacks);
+    }
     if (lifestealPct > 0.0f) {
         ImGui::Text("체력흡수"); ImGui::SameLine(100); ImGui::Text("%.0f%%", lifestealPct * 100.0f);
+        if (state.lastHealAmount > 0)
+            ImGui::TextColored({0.4f, 0.9f, 0.5f, 1.0f}, "  ↳ 방금 +%lld 회복", state.lastHealAmount);
     }
     if (dmgToPlayer > 0) {
         ImGui::TextColored({1.0f, 0.4f, 0.3f, 1.0f}, "받는 피해 %lld / 틱 — 체력 0이 되면 전투가 리셋됩니다.", dmgToPlayer);
     } else {
-        ImGui::TextDisabled("받는 피해 0 / 틱");
+        ImGui::TextDisabled("받는 피해 %lld / 틱 (방어력으로 대부분 상쇄)", dmgToPlayer);
     }
 
     ImGui::Spacing();
@@ -413,35 +457,37 @@ static void TabDungeon(GameState& state) {
         rawHit = (long long)(baseAtk * 1.5f) * (d.bossStage ? 2 : 1);
         if (d.bossStage) rawHit = (long long)(rawHit * (1.0f + tal.bossDmgBonus));
         ImGui::Text("공격력");  ImGui::SameLine(100);
-        ImGui::Text("%lld / 틱", rawHit);
+        ImGui::Text("%lld / 타", rawHit);
         break;
     case CLASS_MAGE: {
         float critChance = (std::min)(100.0f, 20.0f + tal.critChanceBonus);
         rawHit  = (long long)(baseAtk * 0.7f);
         critHit = (long long)(baseAtk * (4.0f + tal.critDmgBonus));
         ImGui::Text("공격력");  ImGui::SameLine(100);
-        ImGui::Text("%lld 일반  /  %lld 폭발 (%.0f%%)", rawHit, critHit, critChance);
+        ImGui::Text("%lld 일반  /  %lld 폭발 (%.0f%%)  (1타 기준)", rawHit, critHit, critChance);
         break;
     }
     case CLASS_ROGUE:
         rawHit = baseAtk * 2;
         ImGui::Text("공격력");  ImGui::SameLine(100);
-        ImGui::Text("%lld x2 / 틱", baseAtk);
+        ImGui::Text("%lld x2 / 타", baseAtk);
         break;
     default:
         rawHit = baseAtk;
         ImGui::Text("공격력");  ImGui::SameLine(100);
-        ImGui::Text("%lld / 틱", baseAtk);
+        ImGui::Text("%lld / 타", baseAtk);
         break;
     }
 
-    long long effDmg = (std::max)(0LL, (std::max)(rawHit, critHit) - enemyDef);
+    // 실데미지 미리보기 — 1타 기준 값에 평균 공격속도 횟수를 곱해서 틱당 기대치로 환산
+    long long perTickRaw = (long long)((float)(std::max)(rawHit, critHit) * expectedAttacks);
+    long long effDmg = (std::max)(0LL, perTickRaw - enemyDef);
     ImGui::Spacing();
     if (effDmg <= 0) {
         ImGui::TextColored({1.0f, 0.4f, 0.3f, 1.0f},
             "실데미지 0 — 적 방어력을 못 넘어 진행 불가. 업그레이드/장비로 공격력을 올리세요.");
     } else {
-        ImGui::TextDisabled("실데미지(방어 적용 후)  %lld / 틱", effDmg);
+        ImGui::TextDisabled("실데미지(방어 적용 후, 틱당 기대치)  %lld / 틱", effDmg);
     }
 }
 

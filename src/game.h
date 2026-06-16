@@ -67,7 +67,10 @@ struct Dungeon {
     bool      bossStage  = false;
 };
 
-static constexpr int PRESTIGE_STAGE_REQ = 20; // 프레스티지 해금 조건
+static constexpr int   PRESTIGE_STAGE_REQ  = 20;    // 프레스티지 해금 조건
+static constexpr float PRESTIGE_ECON_BONUS = 0.15f; // 회당 XP/골드/드랍률 보너스
+static constexpr float PRESTIGE_ATK_BONUS  = 0.10f; // 회당 공격력 보너스
+static constexpr long long PRESTIGE_HP_BONUS = 20;  // 회당 최대체력 보너스
 
 long long XpForLevel(int level); // 지수 증가 — 레벨업이 점점 크게 느려짐
 
@@ -84,8 +87,13 @@ struct GameState {
     Talent    talents[TAL_COUNT];
     int       talentPoints = 0; // 미사용 특성 포인트 (레벨업마다 +1)
 
-    long long playerHp    = 200;
-    long long playerMaxHp = 200;
+    long long playerHp       = 200;
+    long long playerMaxHp    = 200;
+    long long lastHealAmount = 0; // 이번 틱 체력흡수 회복량 (표시용, 저장 안 함)
+
+    // 위장 시간 기록 — 백그라운드로 켜놓은 누적 시간 / 대시보드를 열어본 누적 시간
+    double totalRunSec      = 0.0;
+    double dashboardOpenSec = 0.0;
 
     Dungeon   dungeon;
     Inventory inventory;
@@ -102,6 +110,9 @@ long long    EnemyAtkForStage(int stage);
 long long    PlayerBaseAtk(int stage);
 long long    PlayerBaseDef(int stage);
 long long    PlayerBaseMaxHp(int stage, int prestigeCount);
+// 방어력을 적용한 후 실제로 들어오는 피해 — 비율 기반 감소(체력/(체력+K))라 투자가
+// 클수록 효과가 크지만 0으로 완전히 막히지는 않음 (몹 성장이 항상 어느 정도는 위협이 됨).
+long long    MitigateDamage(long long incomingDmg, long long defValue);
 long long    GetUpgradeCost(const Upgrade& u);
 bool         PurchaseUpgrade(GameState& state, int id);
 void         InitTalentsForClass(GameState& state);
@@ -109,6 +120,7 @@ bool         InvestTalent(GameState& state, int id);
 TalentBonuses ComputeTalentBonuses(const GameState& state);
 long long    PrestigeRequirement(int prestigeCount);
 void         DoPrestige(GameState& state);
+void         ResetGame(GameState& state); // 세이브 초기화 (직업 재선택부터 다시 시작)
 std::wstring GameTick(GameState& state);
 void         SaveGame(const GameState& state);
 void         LoadGame(GameState& state);

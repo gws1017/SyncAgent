@@ -23,6 +23,7 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_TIMER:
         if (wp == TIMER_TICK) {
+            g_state.totalRunSec += TICK_MS / 1000.0; // 위장 가동 시간 누적
             std::wstring notify = GameTick(g_state);
             if (!notify.empty())
                 TrayNotify(L"Background sync", notify);
@@ -111,6 +112,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
                 if (sleepMs > 1) Sleep(sleepMs - 1);
                 continue;
             }
+            g_state.dashboardOpenSec += (double)frameInterval / (double)freq.QuadPart; // 노출 시간 누적
             lastFrame = now;
             DashboardFrame(g_state);
         } else {

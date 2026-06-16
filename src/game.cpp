@@ -275,9 +275,9 @@ std::wstring GameTick(GameState& state) {
 
         wchar_t buf[128];
         if (state.dungeon.bossStage)
-            swprintf_s(buf, L"[sync] 보스 처치! 스테이지 %d 클리어 (+%lld G)", state.dungeon.stage, reward);
+            swprintf(buf, 128, L"[sync] 보스 처치! 스테이지 %d 클리어 (+%lld G)", state.dungeon.stage, reward);
         else
-            swprintf_s(buf, L"[sync] 스테이지 %d 클리어 (+%lld G)", state.dungeon.stage, reward);
+            swprintf(buf, 128, L"[sync] 스테이지 %d 클리어 (+%lld G)", state.dungeon.stage, reward);
         state.lastEvent = buf;
         if (state.dungeon.bossStage) notify = buf; // 보스만 알림, 일반 클리어는 조용히
 
@@ -307,9 +307,9 @@ std::wstring GameTick(GameState& state) {
         wchar_t buf[64];
         if (state.talentPoints + spent < MAX_TALENT_POINTS) {
             state.talentPoints++;
-            swprintf_s(buf, L"[sync] 레벨 %d 달성 (특성 포인트 +1)", state.level);
+            swprintf(buf, 64, L"[sync] 레벨 %d 달성 (특성 포인트 +1)", state.level);
         } else {
-            swprintf_s(buf, L"[sync] 레벨 %d 달성", state.level);
+            swprintf(buf, 64, L"[sync] 레벨 %d 달성", state.level);
         }
         state.lastEvent = buf;
     }
@@ -324,10 +324,10 @@ std::wstring GameTick(GameState& state) {
             state.inventory.items.push_back(dropped);
         }
         wchar_t buf[64];
-        swprintf_s(buf, L"[sync] %s 아이템 획득 (%s +%.0f%%)",
-                   GradeNameW(dropped.grade),
-                   StatNameW(dropped.stat),
-                   dropped.bonus * 100.0f);
+        swprintf(buf, 64, L"[sync] %s 아이템 획득 (%s +%.0f%%)",
+                 GradeNameW(dropped.grade),
+                 StatNameW(dropped.stat),
+                 dropped.bonus * 100.0f);
         state.lastEvent = buf;
         if (notify.empty() && dropped.grade >= Grade::Rare) notify = buf;
     }
@@ -339,8 +339,8 @@ std::wstring GameTick(GameState& state) {
 // 경로 탐색은 platform.h 뒤로 위임 (OS별 구현은 platform_win.cpp 등)
 
 void SaveGame(const GameState& state) {
-    FILE* f = nullptr;
-    if (_wfopen_s(&f, GetSaveFilePath().c_str(), L"w") != 0 || !f) return;
+    FILE* f = OpenSaveFileForWrite();
+    if (!f) return;
     fprintf(f, "%d %lld %lld %lld\n", state.level, state.xp, state.gold, state.items);
     for (int i = 0; i < UP_COUNT; i++) fprintf(f, "%d ", state.upgrades[i].level);
     fprintf(f, "\n%d\n%d\n%d\n", state.dungeon.stage, (int)state.playerClass, state.prestigeCount);
@@ -354,22 +354,22 @@ void SaveGame(const GameState& state) {
 
 void LoadGame(GameState& state) {
     InitUpgrades(state);
-    FILE* f = nullptr;
-    if (_wfopen_s(&f, GetSaveFilePath().c_str(), L"r") != 0 || !f) return;
-    if (fscanf_s(f, "%d %lld %lld %lld",
-                 &state.level, &state.xp, &state.gold, &state.items) == 4) {
+    FILE* f = OpenSaveFileForRead();
+    if (!f) return;
+    if (fscanf(f, "%d %lld %lld %lld",
+               &state.level, &state.xp, &state.gold, &state.items) == 4) {
         for (int i = 0; i < UP_COUNT; i++)
-            fscanf_s(f, "%d", &state.upgrades[i].level);
+            fscanf(f, "%d", &state.upgrades[i].level);
         int cls = 0;
-        fscanf_s(f, "%d%d%d", &state.dungeon.stage, &cls, &state.prestigeCount);
+        fscanf(f, "%d%d%d", &state.dungeon.stage, &cls, &state.prestigeCount);
         state.playerClass = (ClassType)cls;
         InitTalentsForClass(state);
         char invBuf[4096] = {};
-        if (fscanf_s(f, " %4095[^\n]", invBuf, (unsigned)sizeof(invBuf)) == 1)
+        if (fscanf(f, " %4095[^\n]", invBuf) == 1)
             DeserializeInventory(invBuf, state.inventory);
-        if (fscanf_s(f, "%d", &state.talentPoints) == 1) {
+        if (fscanf(f, "%d", &state.talentPoints) == 1) {
             for (int i = 0; i < TAL_COUNT; i++)
-                fscanf_s(f, "%d", &state.talents[i].level);
+                fscanf(f, "%d", &state.talents[i].level);
         }
     } else {
         state = GameState{};

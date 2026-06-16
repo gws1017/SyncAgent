@@ -39,6 +39,12 @@ target_link_libraries(syncagent PRIVATE
 
 target_compile_definitions(syncagent PRIVATE UNICODE _UNICODE)
 
+# game.cpp/equipment.cpp는 표준 CRT 함수(fscanf/sscanf/swprintf)를 의도적으로 사용함
+# (MSVC 전용 _s 버전은 Android NDK에 없어서 모바일 포팅이 막힘). 디프리케이션 경고 끔.
+if (MSVC)
+    target_compile_definitions(syncagent PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+
 if (MSVC)
     target_compile_options(syncagent PRIVATE /W4 /permissive- /utf-8)
 endif()

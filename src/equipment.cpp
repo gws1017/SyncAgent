@@ -146,7 +146,7 @@ void DeserializeInventory(const std::string& data, Inventory& inv) {
         std::string token;
         while (std::getline(ss, token, '|')) {
             int g = 0, s = 0;
-            if (sscanf_s(token.c_str(), "%d %d", &g, &s) == 2) {
+            if (sscanf(token.c_str(), "%d %d", &g, &s) == 2) {
                 Grade  grade = (Grade)std::clamp(g, 0, 3);
                 StatType stat = (StatType)std::clamp(s, 0, (int)StatType::STAT_COUNT - 1);
                 out.push_back({ grade, stat, BonusForGrade(grade) });

@@ -22,4 +22,4 @@ cmake_install.cmake
 install_manifest.txt
 
 # Save data (user-local, not source)
-*.txt
+save.txt

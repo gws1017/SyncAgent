@@ -299,12 +299,18 @@ std::wstring GameTick(GameState& state) {
     }
 
     // 레벨업 (대시보드 현황에만 표시, 알림 없음) — 레벨업마다 특성 포인트 1개 지급
+    // 단, 평생 받는 포인트는 MAX_TALENT_POINTS로 캡 (3개 다 풀업하는 30보다 적게)
     while (state.xp >= state.xpForNext()) {
         state.xp -= state.xpForNext();
         state.level++;
-        state.talentPoints++;
+        int spent = state.talents[TAL_0].level + state.talents[TAL_1].level + state.talents[TAL_2].level;
         wchar_t buf[64];
-        swprintf_s(buf, L"[sync] 레벨 %d 달성 (특성 포인트 +1)", state.level);
+        if (state.talentPoints + spent < MAX_TALENT_POINTS) {
+            state.talentPoints++;
+            swprintf_s(buf, L"[sync] 레벨 %d 달성 (특성 포인트 +1)", state.level);
+        } else {
+            swprintf_s(buf, L"[sync] 레벨 %d 달성", state.level);
+        }
         state.lastEvent = buf;
     }
 

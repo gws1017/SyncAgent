@@ -219,8 +219,11 @@ static void TabUpgrade(GameState& state) {
 
 static void TabTalent(GameState& state) {
     ImGui::Spacing();
-    ImGui::TextDisabled("레벨업마다 1포인트 지급. 전부 다 찍을 순 없음 — 골라서 투자.");
+    int spent = state.talents[TAL_0].level + state.talents[TAL_1].level + state.talents[TAL_2].level;
+    ImGui::TextDisabled("레벨업마다 1포인트 지급. 평생 최대 %d포인트 — 3개 다 풀업(30)은 불가능, 골라서 투자.",
+                         MAX_TALENT_POINTS);
     ImGui::Text("보유 포인트"); ImGui::SameLine(120); ImGui::Text("%d", state.talentPoints);
+    ImGui::Text("누적 (보유+투자)"); ImGui::SameLine(120); ImGui::Text("%d / %d", state.talentPoints + spent, MAX_TALENT_POINTS);
     ImGui::Separator();
     ImGui::Spacing();
 

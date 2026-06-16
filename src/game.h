@@ -42,6 +42,10 @@ struct Talent {
 // 인덱스 = ClassType - 1. 클래스 선택 시 InitTalentsForClass()로 채워짐.
 extern const Talent kTalentDefs[3][TAL_COUNT];
 
+// 특성 3개 다 풀업하려면 30포인트가 필요한데, 평생 받을 수 있는 포인트를 이보다
+// 적게 캡 걸어서 (절반 정도) 항상 일부만 선택해서 투자하도록 강제함.
+static constexpr int MAX_TALENT_POINTS = 15;
+
 // 특성 포인트를 수치 보너스로 환산한 결과 (클래스마다 슬롯 의미가 다름).
 // GameTick과 대시보드 미리보기가 같은 함수를 써서 표시값과 실제값이 항상 일치하게 함.
 struct TalentBonuses {

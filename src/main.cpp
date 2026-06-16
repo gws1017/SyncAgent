@@ -82,11 +82,41 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
 
     SetTimer(msgHwnd, TIMER_TICK, TICK_MS, nullptr);
 
+    // 고해상도 타이머로 ~60fps 프레임 캡
+    LARGE_INTEGER freq, lastFrame;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&lastFrame);
+    const long long frameInterval = freq.QuadPart / 60;
+
     MSG m;
-    while (GetMessageW(&m, nullptr, 0, 0)) {
-        DashboardFrame(g_state);
-        TranslateMessage(&m);
-        DispatchMessageW(&m);
+    bool running = true;
+    while (running) {
+        if (DashboardIsVisible()) {
+            // 대시보드가 열려있을 때: PeekMessage로 메시지 소진 후 렌더
+            while (PeekMessageW(&m, nullptr, 0, 0, PM_REMOVE)) {
+                if (m.message == WM_QUIT) { running = false; break; }
+                TranslateMessage(&m);
+                DispatchMessageW(&m);
+            }
+            if (!running) break;
+
+            // 60fps 프레임 캡 — 아직 시간이 안 됐으면 잠깐 양보
+            LARGE_INTEGER now;
+            QueryPerformanceCounter(&now);
+            long long elapsed = now.QuadPart - lastFrame.QuadPart;
+            if (elapsed < frameInterval) {
+                DWORD sleepMs = (DWORD)((frameInterval - elapsed) * 1000 / freq.QuadPart);
+                if (sleepMs > 1) Sleep(sleepMs - 1);
+                continue;
+            }
+            lastFrame = now;
+            DashboardFrame(g_state);
+        } else {
+            // 대시보드가 닫혀있을 때: GetMessage로 블로킹 (CPU 0%)
+            if (!GetMessageW(&m, nullptr, 0, 0)) break;
+            TranslateMessage(&m);
+            DispatchMessageW(&m);
+        }
     }
     return 0;
 }

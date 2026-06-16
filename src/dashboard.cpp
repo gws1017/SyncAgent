@@ -139,12 +139,6 @@ bool DashboardIsVisible() { return g_visible; }
 void DashboardFrame(GameState& state) {
     if (!g_visible) return;
 
-    MSG msg;
-    while (PeekMessageW(&msg, g_hwnd, 0, 0, PM_REMOVE)) {
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
-    }
-
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();

@@ -1,0 +1,25 @@
+# Build output
+build/
+out/
+*.exe
+*.pdb
+*.ilk
+*.obj
+*.lib
+*.exp
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+
+# Save data (user-local, not source)
+*.txt

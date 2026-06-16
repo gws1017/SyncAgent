@@ -78,7 +78,6 @@ struct GameState {
     int       level = 1;
     long long xp    = 0;
     long long gold  = 0;
-    long long items = 0;
     std::wstring lastEvent = L"대기 중...";
 
     Upgrade   upgrades[UP_COUNT];
@@ -97,6 +96,12 @@ struct GameState {
 
 long long    EnemyDefForStage(int stage);
 long long    EnemyAtkForStage(int stage);
+// 플레이어 기본 스탯 — 적보다 느린 속도로 스테이지에 따라 성장 (몹 성장 공식과 짝을 이룸).
+// 투자(업그레이드/장비/특성) 없이도 어느 정도는 가지만, 결국 몹 성장 속도를 못 따라가서
+// 투자가 필요해지는 "느려지는 장벽"을 만듦 (즉시 0데미지로 막히는 "딱딱한 장벽" 대신).
+long long    PlayerBaseAtk(int stage);
+long long    PlayerBaseDef(int stage);
+long long    PlayerBaseMaxHp(int stage, int prestigeCount);
 long long    GetUpgradeCost(const Upgrade& u);
 bool         PurchaseUpgrade(GameState& state, int id);
 void         InitTalentsForClass(GameState& state);

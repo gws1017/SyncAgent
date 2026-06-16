@@ -116,6 +116,21 @@ long long EnemyAtkForStage(int stage) {
     return (long long)(4.0 + stage * 1.5);
 }
 
+// 플레이어 기본 스탯 — 몹보다 느린 속도로 같이 성장 (몹 공식과 짝을 이룸).
+// 성장률이 몹보다 낮아서 투자 없이는 결국 따라잡히지만, 시작부터 0데미지로
+// 막히지는 않음 — "느려지는 장벽" 쪽으로 완화.
+long long PlayerBaseAtk(int stage) {
+    return (long long)(10.0 + stage * 0.9); // 적 방어력(1.8/stage)의 절반 속도
+}
+
+long long PlayerBaseDef(int stage) {
+    return (long long)(10.0 + stage * 0.75); // 적 공격력(1.5/stage)의 절반 속도
+}
+
+long long PlayerBaseMaxHp(int stage, int prestigeCount) {
+    return 200 + (long long)stage * 8 + (long long)prestigeCount * 20;
+}
+
 // XP 곡선 — 지수 증가. 레벨이 오를수록 한 단계 올리는 데 필요한 경험치가 급격히 커져서
 // (예: 55레벨대면 요구치가 억 단위) 레벨업 자체가 점점 큰 이벤트가 됨.
 long long XpForLevel(int level) {
@@ -206,15 +221,14 @@ std::wstring GameTick(GameState& state) {
 
     std::wstring notify;
 
-    // 플레이어 체력 — 프레스티지마다 최대치 소폭 증가
-    long long maxHp = 200 + (long long)state.prestigeCount * 20;
+    // 플레이어 체력 — 스테이지에 따라 소폭 성장 + 프레스티지마다 추가 증가
+    long long maxHp = PlayerBaseMaxHp(state.dungeon.stage, state.prestigeCount);
     state.playerMaxHp = maxHp;
     if (state.playerHp <= 0 || state.playerHp > maxHp) state.playerHp = maxHp;
 
     // 던전 전투 — 클래스별 공격 방식
-    // 공격력은 레벨과 무관하게 고정 기반값 + 투자(업그레이드/장비/프레스티지/특성)로만 상승.
-    // 레벨업만으로는 절대 못 따라가게 만들어, 장비/업그레이드/특성 투자를 강제하는 진행 장벽 역할.
-    constexpr long long BASE_ATK = 10;
+    // 공격력 기반값은 몹보다 느리게 스테이지를 따라 성장하고, 그 위에
+    // 투자(업그레이드/장비/프레스티지/특성)가 곱연산으로 얹힘 — 투자가 여전히 핵심.
     TalentBonuses tal = ComputeTalentBonuses(state);
     float atkMult = 1.0f + GetEquippedBonus(state.inventory, StatType::Attack)
                          + state.prestigeCount * 0.10f
@@ -222,7 +236,7 @@ std::wstring GameTick(GameState& state) {
                          + tal.atkBonus;
     float atkSpeedMult = 1.0f + GetEquippedBonus(state.inventory, StatType::AtkSpeed)
                                + tal.atkSpeedBonus;
-    long long baseAtk = (long long)(BASE_ATK * atkMult);
+    long long baseAtk = (long long)(PlayerBaseAtk(state.dungeon.stage) * atkMult);
     long long totalDmg = 0;
     switch (state.playerClass) {
     case CLASS_WARRIOR:
@@ -287,7 +301,7 @@ std::wstring GameTick(GameState& state) {
     }
 
     // 적 반격 — 방어력/체력흡수 투자가 부족하면 죽어서 전투가 리셋됨 (스테이지는 유지)
-    long long playerDef = (long long)(10.0 * (1.0f + GetEquippedBonus(state.inventory, StatType::Defense) + tal.defenseBonus));
+    long long playerDef = (long long)(PlayerBaseDef(state.dungeon.stage) * (1.0f + GetEquippedBonus(state.inventory, StatType::Defense) + tal.defenseBonus));
     long long enemyAtk   = EnemyAtkForStage(state.dungeon.stage);
     long long dmgToPlayer = std::max(0LL, enemyAtk - playerDef);
     dmgToPlayer = (long long)(dmgToPlayer * (1.0f - std::min(0.9f, tal.evasionBonus))); // 은신 회피
@@ -319,7 +333,6 @@ std::wstring GameTick(GameState& state) {
     int dropChance = (int)(6.0f * dropMult);
     std::uniform_int_distribution<int> roll(1, 100);
     if (roll(g_rng) <= dropChance) {
-        state.items++;
         Item dropped = MakeItem(Grade::Common);
         if ((int)state.inventory.items.size() < Inventory::MAX_ITEMS) {
             state.inventory.items.push_back(dropped);
@@ -342,7 +355,7 @@ std::wstring GameTick(GameState& state) {
 void SaveGame(const GameState& state) {
     FILE* f = OpenSaveFileForWrite();
     if (!f) return;
-    fprintf(f, "%d %lld %lld %lld\n", state.level, state.xp, state.gold, state.items);
+    fprintf(f, "%d %lld %lld\n", state.level, state.xp, state.gold);
     for (int i = 0; i < UP_COUNT; i++) fprintf(f, "%d ", state.upgrades[i].level);
     fprintf(f, "\n%d\n%d\n%d\n", state.dungeon.stage, (int)state.playerClass, state.prestigeCount);
     std::string inv = SerializeInventory(state.inventory);
@@ -357,8 +370,8 @@ void LoadGame(GameState& state) {
     InitUpgrades(state);
     FILE* f = OpenSaveFileForRead();
     if (!f) return;
-    if (fscanf(f, "%d %lld %lld %lld",
-               &state.level, &state.xp, &state.gold, &state.items) == 4) {
+    if (fscanf(f, "%d %lld %lld",
+               &state.level, &state.xp, &state.gold) == 3) {
         for (int i = 0; i < UP_COUNT; i++)
             fscanf(f, "%d", &state.upgrades[i].level);
         int cls = 0;

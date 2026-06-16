@@ -241,11 +241,6 @@ static void TabEquipment(GameState& state) {
     Inventory& inv = state.inventory;
     ImGui::Spacing();
 
-    ImGui::Text("유물");      ImGui::SameLine(100); ImGui::Text("%lld 개 누적 획득", state.items);
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
     // ---- 장착 슬롯 ----------------------------------------------------------
     ImGui::TextDisabled("장착 중  (%d / %d)", (int)inv.equipped.size(), Inventory::MAX_EQUIP);
     ImGui::Separator();
@@ -391,10 +386,10 @@ static void TabDungeon(GameState& state) {
                          + tal.atkBonus;
     float atkSpeedMult = 1.0f + GetEquippedBonus(state.inventory, StatType::AtkSpeed)
                                + tal.atkSpeedBonus;
-    long long baseAtk = (long long)(10 * atkMult * atkSpeedMult);
+    long long baseAtk = (long long)(PlayerBaseAtk(d.stage) * atkMult * atkSpeedMult);
     long long enemyDef = EnemyDefForStage(d.stage);
     long long enemyAtk = EnemyAtkForStage(d.stage);
-    long long playerDef = (long long)(10.0 * (1.0f + GetEquippedBonus(state.inventory, StatType::Defense) + tal.defenseBonus));
+    long long playerDef = (long long)(PlayerBaseDef(d.stage) * (1.0f + GetEquippedBonus(state.inventory, StatType::Defense) + tal.defenseBonus));
     float lifestealPct = GetEquippedBonus(state.inventory, StatType::Lifesteal) + tal.lifestealBonus;
     long long dmgToPlayer = (std::max)(0LL, enemyAtk - playerDef);
     dmgToPlayer = (long long)(dmgToPlayer * (1.0f - (std::min)(0.9f, tal.evasionBonus)));

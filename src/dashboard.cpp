@@ -20,7 +20,7 @@ static ID3D11RenderTargetView* g_mainRenderTarget = nullptr;
 static HWND g_hwnd    = nullptr;
 static bool g_visible = false;
 
-static constexpr int W = 460, H = 400;
+static constexpr int W = 460, H = 480;
 
 // wstring → UTF-8 변환 헬퍼 (ImGui는 UTF-8 사용)
 static void ToUtf8(const std::wstring& src, char* dst, int dstSize) {
@@ -123,62 +123,18 @@ static void TabStatus(GameState& state) {
     ImGui::Separator();
     ImGui::Spacing();
 
-    char buf[64];
-    const char* clsName = (state.playerClass != CLASS_NONE)
-                          ? kClasses[(int)state.playerClass - 1].name : "?";
-    snprintf(buf, sizeof(buf), "Lv.%d  [%s]", state.level, clsName);
-    ImGui::Text("영웅");      ImGui::SameLine(100); ImGui::Text("%s", buf);
-
-    ImGui::Spacing();
-    ImGui::Text("XP");        ImGui::SameLine(100);
-    char xpOverlay[32];
-    snprintf(xpOverlay, sizeof(xpOverlay), "%lld / %lld", state.xp, state.xpForNext());
-    ImGui::ProgressBar(state.xpProgress(), {320, 0}, xpOverlay);
-
-    ImGui::Spacing();
-    ImGui::Text("체력");      ImGui::SameLine(100);
-    char hpOverlay[32];
-    snprintf(hpOverlay, sizeof(hpOverlay), "%lld / %lld", state.playerHp, state.playerMaxHp);
-    float hpFrac = (state.playerMaxHp > 0) ? (float)state.playerHp / (float)state.playerMaxHp : 0.0f;
-    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.30f, 0.80f, 0.35f, 1.0f));
-    ImGui::ProgressBar(hpFrac, {320, 0}, hpOverlay);
-    ImGui::PopStyleColor();
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    ImGui::Text("골드");      ImGui::SameLine(100); ImGui::Text("%lld G", state.gold);
-    ImGui::Text("유물");      ImGui::SameLine(100); ImGui::Text("%lld 개", state.items);
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
     char evt[128] = {};
     ToUtf8(state.lastEvent, evt, sizeof(evt));
     ImGui::TextDisabled("최근 이벤트");
     ImGui::TextWrapped("%s", evt);
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    ImGui::TextDisabled("프레스티지  (%d회 / 보너스 +%.0f%%)",
-                         state.prestigeCount, state.prestigeCount * 15.0f);
-    long long req = PrestigeRequirement(state.prestigeCount);
-    bool canPrestige = state.dungeon.stage >= req;
-    if (!canPrestige) ImGui::BeginDisabled();
-    if (ImGui::Button("프레스티지 실행 (레벨/골드/스테이지 초기화)", {320, 0})) {
-        DoPrestige(state);
-        SaveGame(state);
-    }
-    if (!canPrestige) ImGui::EndDisabled();
-    if (!canPrestige)
-        ImGui::TextDisabled("스테이지 %lld 이상 도달 시 해금", req);
 }
 
 static void TabUpgrade(GameState& state) {
+    ImGui::Spacing();
+
+    ImGui::Text("골드");      ImGui::SameLine(100); ImGui::Text("%lld G", state.gold);
+    ImGui::Spacing();
+    ImGui::Separator();
     ImGui::Spacing();
 
     for (int i = 0; i < UP_COUNT; i++) {
@@ -215,6 +171,23 @@ static void TabUpgrade(GameState& state) {
         ImGui::Spacing();
         ImGui::PopID();
     }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    ImGui::TextDisabled("프레스티지  (%d회 / 보너스 +%.0f%%)",
+                         state.prestigeCount, state.prestigeCount * 15.0f);
+    long long req = PrestigeRequirement(state.prestigeCount);
+    bool canPrestige = state.dungeon.stage >= req;
+    if (!canPrestige) ImGui::BeginDisabled();
+    if (ImGui::Button("프레스티지 실행 (레벨/골드/스테이지 초기화)", {320, 0})) {
+        DoPrestige(state);
+        SaveGame(state);
+    }
+    if (!canPrestige) ImGui::EndDisabled();
+    if (!canPrestige)
+        ImGui::TextDisabled("스테이지 %lld 이상 도달 시 해금", req);
 }
 
 static void TabTalent(GameState& state) {
@@ -266,6 +239,11 @@ static ImVec4 GradeColor(Grade g) {
 
 static void TabEquipment(GameState& state) {
     Inventory& inv = state.inventory;
+    ImGui::Spacing();
+
+    ImGui::Text("유물");      ImGui::SameLine(100); ImGui::Text("%lld 개 누적 획득", state.items);
+    ImGui::Spacing();
+    ImGui::Separator();
     ImGui::Spacing();
 
     // ---- 장착 슬롯 ----------------------------------------------------------
@@ -354,14 +332,39 @@ static void TabDungeon(GameState& state) {
     Dungeon& d = state.dungeon;
     ImGui::Spacing();
 
+    // ---- 캐릭터 상태 (적 체력과 바로 비교되도록 같은 너비로 위에 배치) ----------
+    char clsBuf[64];
+    const char* clsName = (state.playerClass != CLASS_NONE)
+                          ? kClasses[(int)state.playerClass - 1].name : "?";
+    snprintf(clsBuf, sizeof(clsBuf), "Lv.%d  [%s]", state.level, clsName);
+    ImGui::Text("영웅");      ImGui::SameLine(100); ImGui::Text("%s", clsBuf);
+
+    ImGui::Spacing();
+    ImGui::Text("XP");        ImGui::SameLine(100);
+    char xpOverlay[32];
+    snprintf(xpOverlay, sizeof(xpOverlay), "%lld / %lld", state.xp, state.xpForNext());
+    ImGui::ProgressBar(state.xpProgress(), {320, 0}, xpOverlay);
+
+    ImGui::Spacing();
+    ImGui::Text("내 체력");    ImGui::SameLine(100);
+    char playerHpOverlay[32];
+    snprintf(playerHpOverlay, sizeof(playerHpOverlay), "%lld / %lld", state.playerHp, state.playerMaxHp);
+    float playerHpFrac = (state.playerMaxHp > 0) ? (float)state.playerHp / (float)state.playerMaxHp : 0.0f;
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.30f, 0.80f, 0.35f, 1.0f));
+    ImGui::ProgressBar(playerHpFrac, {320, 0}, playerHpOverlay);
+    ImGui::PopStyleColor();
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
     char stageBuf[32];
     snprintf(stageBuf, sizeof(stageBuf),
              d.bossStage ? "스테이지 %d  [BOSS]" : "스테이지 %d", d.stage);
     ImGui::Text("%s", stageBuf);
 
     ImGui::Spacing();
-    ImGui::Text("적 HP");
-    ImGui::SameLine(80);
+    ImGui::Text("적 체력");    ImGui::SameLine(100);
 
     float hpPct = (d.enemyMaxHp > 0)
                   ? (float)d.enemyHp / (float)d.enemyMaxHp
@@ -396,7 +399,6 @@ static void TabDungeon(GameState& state) {
     long long dmgToPlayer = (std::max)(0LL, enemyAtk - playerDef);
     dmgToPlayer = (long long)(dmgToPlayer * (1.0f - (std::min)(0.9f, tal.evasionBonus)));
 
-    ImGui::Text("스테이지"); ImGui::SameLine(100); ImGui::Text("%d", d.stage);
     ImGui::Text("적 방어력"); ImGui::SameLine(100); ImGui::Text("%lld", enemyDef);
     ImGui::Text("적 공격력"); ImGui::SameLine(100); ImGui::Text("%lld", enemyAtk);
     ImGui::Text("내 방어력"); ImGui::SameLine(100); ImGui::Text("%lld", playerDef);

@@ -283,6 +283,7 @@ std::wstring GameTick(GameState& state) {
 
         state.dungeon.stage++;
         InitDungeonStage(state.dungeon);
+        state.playerHp = state.playerMaxHp; // 스테이지 클리어 시 체력 리필
     }
 
     // 적 반격 — 방어력/체력흡수 투자가 부족하면 죽어서 전투가 리셋됨 (스테이지는 유지)

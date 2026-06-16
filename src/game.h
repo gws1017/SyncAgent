@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include "equipment.h"
 
 // ---- 클래스 -----------------------------------------------------------------
 enum ClassType { CLASS_NONE = 0, CLASS_WARRIOR, CLASS_MAGE, CLASS_ROGUE };
@@ -43,8 +44,9 @@ struct GameState {
     long long items = 0;
     std::wstring lastEvent = L"대기 중...";
 
-    Upgrade upgrades[UP_COUNT];
-    Dungeon dungeon;
+    Upgrade   upgrades[UP_COUNT];
+    Dungeon   dungeon;
+    Inventory inventory;
 
     long long xpForNext()  const { return 50LL + (long long)level * 25LL; }
     float     xpProgress() const { return (float)xp / (float)xpForNext(); }

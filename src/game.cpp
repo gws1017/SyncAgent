@@ -1,4 +1,5 @@
 #include "game.h"
+#include "equipment.h"
 #include <windows.h>
 #include <shlobj.h>
 #include <cstdio>
@@ -81,6 +82,11 @@ std::wstring GameTick(GameState& state) {
     if (state.playerClass == CLASS_ROGUE)   goldMult *= 1.3f;
     if (state.playerClass == CLASS_ROGUE)   dropMult *= 2.0f;
 
+    // 장착 아이템 스탯 반영
+    xpMult   += GetEquippedBonus(state.inventory, StatType::Xp);
+    goldMult += GetEquippedBonus(state.inventory, StatType::Gold);
+    dropMult += GetEquippedBonus(state.inventory, StatType::Drop);
+
     long long xpGain   = (long long)((5 + state.level * 2) * xpMult);
     long long goldGain = (long long)((3 + state.level)     * goldMult);
     state.xp   += xpGain;
@@ -89,7 +95,8 @@ std::wstring GameTick(GameState& state) {
     std::wstring notify;
 
     // 던전 전투 — 클래스별 공격 방식
-    long long baseAtk = (long long)state.level * 10;
+    float atkMult = 1.0f + GetEquippedBonus(state.inventory, StatType::Attack);
+    long long baseAtk = (long long)(state.level * 10 * atkMult);
     long long totalDmg = 0;
     switch (state.playerClass) {
     case CLASS_WARRIOR:
@@ -143,11 +150,15 @@ std::wstring GameTick(GameState& state) {
     std::uniform_int_distribution<int> roll(1, 100);
     if (roll(g_rng) <= dropChance) {
         state.items++;
-        std::uniform_int_distribution<int> bonus(20, 60);
-        long long b = bonus(g_rng);
-        state.gold += b;
+        Item dropped = MakeItem(Grade::Common);
+        if ((int)state.inventory.items.size() < Inventory::MAX_ITEMS) {
+            state.inventory.items.push_back(dropped);
+        }
         wchar_t buf[64];
-        swprintf_s(buf, L"[sync] 유물 #%lld 회수 (+%lld G)", state.items, b);
+        swprintf_s(buf, L"[sync] %S 아이템 획득 (%S +%.0f%%)",
+                   GradeName(dropped.grade),
+                   StatName(dropped.stat),
+                   dropped.bonus * 100.0f);
         state.lastEvent = buf;
         if (notify.empty()) notify = buf;
     }
@@ -172,6 +183,8 @@ void SaveGame(const GameState& state) {
     fprintf(f, "%d %lld %lld %lld\n", state.level, state.xp, state.gold, state.items);
     for (int i = 0; i < UP_COUNT; i++) fprintf(f, "%d ", state.upgrades[i].level);
     fprintf(f, "\n%d\n%d\n", state.dungeon.stage, (int)state.playerClass);
+    std::string inv = SerializeInventory(state.inventory);
+    fprintf(f, "%s\n", inv.c_str());
     fclose(f);
 }
 
@@ -186,6 +199,9 @@ void LoadGame(GameState& state) {
         int cls = 0;
         fscanf_s(f, "%d%d", &state.dungeon.stage, &cls);
         state.playerClass = (ClassType)cls;
+        char invBuf[4096] = {};
+        if (fscanf_s(f, " %4095[^\n]", invBuf, (unsigned)sizeof(invBuf)) == 1)
+            DeserializeInventory(invBuf, state.inventory);
     } else {
         state = GameState{};
         InitUpgrades(state);

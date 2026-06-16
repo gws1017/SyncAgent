@@ -9,6 +9,7 @@ set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/vendor/imgui)
 add_executable(idlegame WIN32
     src/main.cpp
     src/game.cpp
+    src/equipment.cpp
     src/tray.cpp
     src/dashboard.cpp
     ${IMGUI_DIR}/imgui.cpp

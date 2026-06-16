@@ -1,4 +1,5 @@
 #include "dashboard.h"
+#include "equipment.h"
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx11.h"
@@ -130,8 +131,7 @@ static void TabStatus(GameState& state) {
     ImGui::Text("XP");        ImGui::SameLine(100);
     char xpOverlay[32];
     snprintf(xpOverlay, sizeof(xpOverlay), "%lld / %lld", state.xp, state.xpForNext());
-    ImGui::SetNextItemWidth(270);
-    ImGui::ProgressBar(state.xpProgress(), {-1, 0}, xpOverlay);
+    ImGui::ProgressBar(state.xpProgress(), {320, 0}, xpOverlay);
 
     ImGui::Spacing();
     ImGui::Separator();
@@ -189,6 +189,102 @@ static void TabUpgrade(GameState& state) {
     }
 }
 
+static ImVec4 GradeColor(Grade g) {
+    switch (g) {
+    case Grade::Common:    return { 1.0f, 1.0f, 1.0f, 1.0f };
+    case Grade::Rare:      return { 0.3f, 0.6f, 1.0f, 1.0f };
+    case Grade::Epic:      return { 0.7f, 0.3f, 1.0f, 1.0f };
+    case Grade::Legendary: return { 1.0f, 0.8f, 0.1f, 1.0f };
+    }
+    return { 1,1,1,1 };
+}
+
+static void TabEquipment(GameState& state) {
+    Inventory& inv = state.inventory;
+    ImGui::Spacing();
+
+    // ---- 장착 슬롯 ----------------------------------------------------------
+    ImGui::TextDisabled("장착 중  (%d / %d)", (int)inv.equipped.size(), Inventory::MAX_EQUIP);
+    ImGui::Separator();
+
+    if (inv.equipped.empty()) {
+        ImGui::TextDisabled("  장착된 아이템 없음");
+    }
+    for (int i = 0; i < (int)inv.equipped.size(); i++) {
+        const Item& it = inv.equipped[i];
+        ImGui::PushID(100 + i);
+        ImGui::TextColored(GradeColor(it.grade), "[%s]", GradeName(it.grade));
+        ImGui::SameLine();
+        ImGui::Text("%s +%.0f%%", StatName(it.stat), it.bonus * 100.0f);
+        ImGui::SameLine(300);
+        if (ImGui::SmallButton("해제")) Unequip(inv, i);
+        ImGui::PopID();
+    }
+
+    ImGui::Spacing();
+
+    // ---- 보관함 -------------------------------------------------------------
+    ImGui::TextDisabled("보관함  (%d / %d)", (int)inv.items.size(), Inventory::MAX_ITEMS);
+    ImGui::Separator();
+
+    if (inv.items.empty()) {
+        ImGui::TextDisabled("  아이템 없음");
+    }
+
+    // 등급별로 같은 등급 아이템 수 카운트 (합성 버튼 표시용)
+    int gradeCnt[4] = {};
+    for (const Item& it : inv.items) gradeCnt[(int)it.grade]++;
+
+    for (int i = 0; i < (int)inv.items.size(); i++) {
+        const Item& it = inv.items[i];
+        ImGui::PushID(i);
+        ImGui::TextColored(GradeColor(it.grade), "[%s]", GradeName(it.grade));
+        ImGui::SameLine();
+        ImGui::Text("%s +%.0f%%", StatName(it.stat), it.bonus * 100.0f);
+        ImGui::SameLine(300);
+        bool canEquip = (int)inv.equipped.size() < Inventory::MAX_EQUIP;
+        if (!canEquip) ImGui::BeginDisabled();
+        if (ImGui::SmallButton("장착")) TryEquip(inv, i);
+        if (!canEquip) ImGui::EndDisabled();
+        ImGui::PopID();
+    }
+
+    ImGui::Spacing();
+
+    // ---- 합성 버튼 ----------------------------------------------------------
+    ImGui::TextDisabled("합성 (같은 등급 3개 → 상위 등급)");
+    ImGui::Separator();
+
+    struct CraftRule { Grade from; const char* label; int rate; };
+    const CraftRule rules[] = {
+        { Grade::Common, "일반 x3 → 희귀 (100%%)",              100 },
+        { Grade::Rare,   "희귀 x3 → 영웅 (70%%) / 실패시 희귀 1개",  70 },
+        { Grade::Epic,   "영웅 x3 → 전설 (40%%) / 실패시 영웅 1개",  40 },
+    };
+
+    for (auto& rule : rules) {
+        int cnt = gradeCnt[(int)rule.from];
+        bool canCraft = cnt >= 3;
+        char label[64];
+        snprintf(label, sizeof(label), "%s  [보유: %d]", rule.label, cnt);
+        if (!canCraft) ImGui::BeginDisabled();
+        if (ImGui::Button(label, {380, 0})) {
+            // 재료 3개 제거
+            int removed = 0;
+            for (int i = (int)inv.items.size() - 1; i >= 0 && removed < 3; i--) {
+                if (inv.items[i].grade == rule.from) {
+                    inv.items.erase(inv.items.begin() + i);
+                    removed++;
+                }
+            }
+            Item result = CraftItem(rule.from);
+            if ((int)inv.items.size() < Inventory::MAX_ITEMS)
+                inv.items.push_back(result);
+        }
+        if (!canCraft) ImGui::EndDisabled();
+    }
+}
+
 static void TabDungeon(GameState& state) {
     Dungeon& d = state.dungeon;
     ImGui::Spacing();
@@ -212,8 +308,7 @@ static void TabDungeon(GameState& state) {
 
     char hpOverlay[32];
     snprintf(hpOverlay, sizeof(hpOverlay), "%lld / %lld", d.enemyHp, d.enemyMaxHp);
-    ImGui::SetNextItemWidth(290);
-    ImGui::ProgressBar(hpPct, {-1, 0}, hpOverlay);
+    ImGui::ProgressBar(hpPct, {320, 0}, hpOverlay);
 
     if (d.bossStage) ImGui::PopStyleColor();
 
@@ -335,9 +430,10 @@ void DashboardFrame(GameState& state) {
     if (state.playerClass == CLASS_NONE) {
         ScreenClassSelect(state);
     } else if (ImGui::BeginTabBar("##tabs")) {
-        if (ImGui::BeginTabItem("현황"))       { TabStatus(state);  ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("업그레이드"))  { TabUpgrade(state); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("던전"))       { TabDungeon(state); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("현황"))       { TabStatus(state);    ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("업그레이드"))  { TabUpgrade(state);   ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("던전"))       { TabDungeon(state);   ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("장비"))       { TabEquipment(state); ImGui::EndTabItem(); }
         ImGui::EndTabBar();
     }
 

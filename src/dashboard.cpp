@@ -148,6 +148,22 @@ static void TabStatus(GameState& state) {
     ToUtf8(state.lastEvent, evt, sizeof(evt));
     ImGui::TextDisabled("최근 이벤트");
     ImGui::TextWrapped("%s", evt);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    ImGui::TextDisabled("프레스티지  (%d회 / 보너스 +%.0f%%)",
+                         state.prestigeCount, state.prestigeCount * 15.0f);
+    bool canPrestige = state.dungeon.stage >= PRESTIGE_STAGE_REQ;
+    if (!canPrestige) ImGui::BeginDisabled();
+    if (ImGui::Button("프레스티지 실행 (레벨/골드/스테이지 초기화)", {320, 0})) {
+        DoPrestige(state);
+        SaveGame(state);
+    }
+    if (!canPrestige) ImGui::EndDisabled();
+    if (!canPrestige)
+        ImGui::TextDisabled("스테이지 %d 이상 도달 시 해금", PRESTIGE_STAGE_REQ);
 }
 
 static void TabUpgrade(GameState& state) {
@@ -345,7 +361,7 @@ static void TabDungeon(GameState& state) {
 
 // ---- 공개 API --------------------------------------------------------------
 bool DashboardInit(HINSTANCE hInst) {
-    const wchar_t* cls = L"IdleGameDash";
+    const wchar_t* cls = L"SyncAgentDash";
     WNDCLASSW wc = {};
     wc.lpfnWndProc   = DashWndProc;
     wc.hInstance     = hInst;

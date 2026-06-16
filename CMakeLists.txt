@@ -1,17 +1,18 @@
 cmake_minimum_required(VERSION 3.20)
-project(idlegame LANGUAGES CXX)
+project(syncagent LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/vendor/imgui)
 
-add_executable(idlegame WIN32
+add_executable(syncagent WIN32
     src/main.cpp
     src/game.cpp
     src/equipment.cpp
     src/tray.cpp
     src/dashboard.cpp
+    src/app.rc
     ${IMGUI_DIR}/imgui.cpp
     ${IMGUI_DIR}/imgui_draw.cpp
     ${IMGUI_DIR}/imgui_tables.cpp
@@ -20,13 +21,13 @@ add_executable(idlegame WIN32
     ${IMGUI_DIR}/backends/imgui_impl_dx11.cpp
 )
 
-target_include_directories(idlegame PRIVATE
+target_include_directories(syncagent PRIVATE
     src
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
 )
 
-target_link_libraries(idlegame PRIVATE
+target_link_libraries(syncagent PRIVATE
     user32
     shell32
     gdi32
@@ -35,8 +36,8 @@ target_link_libraries(idlegame PRIVATE
     d3dcompiler
 )
 
-target_compile_definitions(idlegame PRIVATE UNICODE _UNICODE)
+target_compile_definitions(syncagent PRIVATE UNICODE _UNICODE)
 
 if (MSVC)
-    target_compile_options(idlegame PRIVATE /W4 /permissive- /utf-8)
+    target_compile_options(syncagent PRIVATE /W4 /permissive- /utf-8)
 endif()

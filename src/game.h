@@ -35,8 +35,11 @@ struct Dungeon {
     bool      bossStage  = false;
 };
 
+static constexpr int PRESTIGE_STAGE_REQ = 20; // 프레스티지 해금 조건
+
 struct GameState {
-    ClassType playerClass = CLASS_NONE;
+    ClassType playerClass  = CLASS_NONE;
+    int       prestigeCount = 0;
 
     int       level = 1;
     long long xp    = 0;
@@ -54,6 +57,7 @@ struct GameState {
 
 long long    GetUpgradeCost(const Upgrade& u);
 bool         PurchaseUpgrade(GameState& state, int id);
+void         DoPrestige(GameState& state);
 std::wstring GameTick(GameState& state);
 void         SaveGame(const GameState& state);
 void         LoadGame(GameState& state);

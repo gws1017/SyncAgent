@@ -23,3 +23,6 @@ install_manifest.txt
 
 # Save data (user-local, not source)
 save.txt
+
+# Vendored dependency (own git repo, fetched separately)
+vendor/

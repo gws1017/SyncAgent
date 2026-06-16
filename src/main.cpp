@@ -8,6 +8,7 @@ static constexpr UINT TIMER_TICK = 1;
 static constexpr UINT TICK_MS    = 3000;
 static constexpr UINT IDM_STATUS = 1001;
 static constexpr UINT IDM_QUIT   = 1002;
+static constexpr UINT IDI_APPICON = 101;
 
 static GameState g_state;
 
@@ -63,18 +64,19 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
     LoadGame(g_state);
 
-    const wchar_t* cls = L"IdleGameMsg";
+    const wchar_t* cls = L"SyncAgentMsg";
     WNDCLASSW wc = {};
     wc.lpfnWndProc   = MsgWndProc;
     wc.hInstance     = hInst;
     wc.lpszClassName = cls;
+    wc.hIcon         = LoadIconW(hInst, MAKEINTRESOURCEW(IDI_APPICON));
     RegisterClassW(&wc);
 
     HWND msgHwnd = CreateWindowW(cls, nullptr, 0, 0, 0, 0, 0,
                                  HWND_MESSAGE, nullptr, hInst, nullptr);
     if (!msgHwnd) return 1;
 
-    TrayInit(msgHwnd, WM_TRAY);
+    TrayInit(msgHwnd, WM_TRAY, hInst);
     UpdateTrayTooltip();
     TrayNotify(L"Background sync", L"[sync] agent started");
 

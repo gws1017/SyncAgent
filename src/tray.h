@@ -2,7 +2,7 @@
 #include <windows.h>
 #include <string>
 
-void TrayInit(HWND hwnd, UINT callbackMsg);
+void TrayInit(HWND hwnd, UINT callbackMsg, HINSTANCE hInst);
 void TrayDestroy();
 void TraySetTooltip(const std::wstring& tip);
 void TrayNotify(const std::wstring& title, const std::wstring& body);

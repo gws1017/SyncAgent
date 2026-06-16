@@ -3,13 +3,16 @@
 
 static NOTIFYICONDATAW g_nid = {};
 
-void TrayInit(HWND hwnd, UINT callbackMsg) {
+static constexpr UINT IDI_APPICON = 101;
+
+void TrayInit(HWND hwnd, UINT callbackMsg, HINSTANCE hInst) {
     g_nid.cbSize           = sizeof(g_nid);
     g_nid.hWnd             = hwnd;
     g_nid.uID              = 1;
     g_nid.uFlags           = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     g_nid.uCallbackMessage = callbackMsg;
-    g_nid.hIcon            = LoadIconW(nullptr, IDI_APPLICATION);
+    g_nid.hIcon            = LoadIconW(hInst, MAKEINTRESOURCEW(IDI_APPICON));
+    if (!g_nid.hIcon) g_nid.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
     wcscpy_s(g_nid.szTip, L"sync agent");
     Shell_NotifyIconW(NIM_ADD, &g_nid);
 }

@@ -68,6 +68,21 @@ bool PurchaseUpgrade(GameState& state, int id) {
     return true;
 }
 
+void DoPrestige(GameState& state) {
+    // 유지: 클래스, 장착 장비, 프레스티지 횟수
+    ClassType          cls      = state.playerClass;
+    std::vector<Item>  equipped = state.inventory.equipped;
+    int                pc       = state.prestigeCount + 1;
+
+    state = GameState{};
+    InitUpgrades(state);
+
+    state.playerClass          = cls;
+    state.inventory.equipped   = equipped;
+    state.prestigeCount        = pc;
+    state.lastEvent            = L"[sync] 프레스티지 완료";
+}
+
 std::wstring GameTick(GameState& state) {
     if (state.dungeon.enemyMaxHp == 0)
         InitDungeonStage(state.dungeon);
@@ -76,6 +91,12 @@ std::wstring GameTick(GameState& state) {
     float xpMult   = 1.0f + state.upgrades[UP_XP].level   * state.upgrades[UP_XP].multiplier;
     float goldMult = 1.0f + state.upgrades[UP_GOLD].level  * state.upgrades[UP_GOLD].multiplier;
     float dropMult = 1.0f + state.upgrades[UP_DROP].level  * state.upgrades[UP_DROP].multiplier;
+
+    // 프레스티지 영구 보너스
+    float prestigeBonus = state.prestigeCount * 0.15f;
+    xpMult   += prestigeBonus;
+    goldMult += prestigeBonus;
+    dropMult += prestigeBonus;
 
     if (state.playerClass == CLASS_MAGE)    xpMult   *= 1.5f;
     if (state.playerClass == CLASS_WARRIOR) goldMult *= 1.2f;
@@ -95,7 +116,8 @@ std::wstring GameTick(GameState& state) {
     std::wstring notify;
 
     // 던전 전투 — 클래스별 공격 방식
-    float atkMult = 1.0f + GetEquippedBonus(state.inventory, StatType::Attack);
+    float atkMult = 1.0f + GetEquippedBonus(state.inventory, StatType::Attack)
+                         + state.prestigeCount * 0.10f;
     long long baseAtk = (long long)(state.level * 10 * atkMult);
     long long totalDmg = 0;
     switch (state.playerClass) {
@@ -182,7 +204,7 @@ void SaveGame(const GameState& state) {
     if (_wfopen_s(&f, SavePath().c_str(), L"w") != 0 || !f) return;
     fprintf(f, "%d %lld %lld %lld\n", state.level, state.xp, state.gold, state.items);
     for (int i = 0; i < UP_COUNT; i++) fprintf(f, "%d ", state.upgrades[i].level);
-    fprintf(f, "\n%d\n%d\n", state.dungeon.stage, (int)state.playerClass);
+    fprintf(f, "\n%d\n%d\n%d\n", state.dungeon.stage, (int)state.playerClass, state.prestigeCount);
     std::string inv = SerializeInventory(state.inventory);
     fprintf(f, "%s\n", inv.c_str());
     fclose(f);
@@ -197,7 +219,7 @@ void LoadGame(GameState& state) {
         for (int i = 0; i < UP_COUNT; i++)
             fscanf_s(f, "%d", &state.upgrades[i].level);
         int cls = 0;
-        fscanf_s(f, "%d%d", &state.dungeon.stage, &cls);
+        fscanf_s(f, "%d%d%d", &state.dungeon.stage, &cls, &state.prestigeCount);
         state.playerClass = (ClassType)cls;
         char invBuf[4096] = {};
         if (fscanf_s(f, " %4095[^\n]", invBuf, (unsigned)sizeof(invBuf)) == 1)

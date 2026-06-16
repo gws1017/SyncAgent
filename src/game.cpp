@@ -7,6 +7,31 @@
 
 static std::mt19937 g_rng{ std::random_device{}() };
 
+// ---- 클래스 정의 ------------------------------------------------------------
+const ClassDef kClasses[3] = {
+    {
+        "전사",
+        "단단하고 안정적인 근접 전투",
+        "공격력 x1.5",
+        "보스 데미지 x2.0",
+        "골드 획득 x1.2",
+    },
+    {
+        "마법사",
+        "강력하지만 불안정한 원거리 마법",
+        "기본 공격 x0.7",
+        "20% 확률로 x4.0 폭발 데미지",
+        "XP 획득 x1.5",
+    },
+    {
+        "도적",
+        "빠르고 날쌘 근접 약탈",
+        "매 틱 2회 공격",
+        "아이템 드랍률 x2.0",
+        "골드 획득 x1.3",
+    },
+};
+
 // ---- 업그레이드 초기화 -------------------------------------------------------
 static void InitUpgrades(GameState& state) {
     state.upgrades[UP_XP]   = { "수련 강도", "XP 획득량 +20% / 레벨",  0, 10,  50, 0.20f };
@@ -46,9 +71,15 @@ std::wstring GameTick(GameState& state) {
     if (state.dungeon.enemyMaxHp == 0)
         InitDungeonStage(state.dungeon);
 
-    // 업그레이드 배율 계산
+    // 업그레이드 + 클래스 배율 계산
     float xpMult   = 1.0f + state.upgrades[UP_XP].level   * state.upgrades[UP_XP].multiplier;
     float goldMult = 1.0f + state.upgrades[UP_GOLD].level  * state.upgrades[UP_GOLD].multiplier;
+    float dropMult = 1.0f + state.upgrades[UP_DROP].level  * state.upgrades[UP_DROP].multiplier;
+
+    if (state.playerClass == CLASS_MAGE)    xpMult   *= 1.5f;
+    if (state.playerClass == CLASS_WARRIOR) goldMult *= 1.2f;
+    if (state.playerClass == CLASS_ROGUE)   goldMult *= 1.3f;
+    if (state.playerClass == CLASS_ROGUE)   dropMult *= 2.0f;
 
     long long xpGain   = (long long)((5 + state.level * 2) * xpMult);
     long long goldGain = (long long)((3 + state.level)     * goldMult);
@@ -57,9 +88,29 @@ std::wstring GameTick(GameState& state) {
 
     std::wstring notify;
 
-    // 던전 전투
-    long long atk = (long long)state.level * 10;
-    state.dungeon.enemyHp -= atk;
+    // 던전 전투 — 클래스별 공격 방식
+    long long baseAtk = (long long)state.level * 10;
+    long long totalDmg = 0;
+    switch (state.playerClass) {
+    case CLASS_WARRIOR:
+        totalDmg = (long long)(baseAtk * 1.5f);
+        if (state.dungeon.bossStage) totalDmg *= 2;  // 보스 특화
+        break;
+    case CLASS_MAGE: {
+        std::uniform_int_distribution<int> critRoll(1, 100);
+        totalDmg = (critRoll(g_rng) <= 20)
+                   ? (long long)(baseAtk * 4.0f)   // 폭발 데미지
+                   : (long long)(baseAtk * 0.7f);  // 일반
+        break;
+    }
+    case CLASS_ROGUE:
+        totalDmg = baseAtk * 2;  // 2회 공격
+        break;
+    default:
+        totalDmg = baseAtk;
+        break;
+    }
+    state.dungeon.enemyHp -= totalDmg;
     if (state.dungeon.enemyHp <= 0) {
         long long reward   = state.dungeon.stage * 10LL * (state.dungeon.bossStage ? 3 : 1);
         long long xpReward = state.dungeon.stage * 5LL;
@@ -88,8 +139,7 @@ std::wstring GameTick(GameState& state) {
     }
 
     // 아이템 드랍
-    float dropMult = 1.0f + state.upgrades[UP_DROP].level * state.upgrades[UP_DROP].multiplier;
-    int   dropChance = (int)(6.0f * dropMult);
+    int dropChance = (int)(6.0f * dropMult);
     std::uniform_int_distribution<int> roll(1, 100);
     if (roll(g_rng) <= dropChance) {
         state.items++;
@@ -121,7 +171,7 @@ void SaveGame(const GameState& state) {
     if (_wfopen_s(&f, SavePath().c_str(), L"w") != 0 || !f) return;
     fprintf(f, "%d %lld %lld %lld\n", state.level, state.xp, state.gold, state.items);
     for (int i = 0; i < UP_COUNT; i++) fprintf(f, "%d ", state.upgrades[i].level);
-    fprintf(f, "\n%d\n", state.dungeon.stage);
+    fprintf(f, "\n%d\n%d\n", state.dungeon.stage, (int)state.playerClass);
     fclose(f);
 }
 
@@ -133,7 +183,9 @@ void LoadGame(GameState& state) {
                  &state.level, &state.xp, &state.gold, &state.items) == 4) {
         for (int i = 0; i < UP_COUNT; i++)
             fscanf_s(f, "%d", &state.upgrades[i].level);
-        fscanf_s(f, "%d", &state.dungeon.stage);
+        int cls = 0;
+        fscanf_s(f, "%d%d", &state.dungeon.stage, &cls);
+        state.playerClass = (ClassType)cls;
     } else {
         state = GameState{};
         InitUpgrades(state);

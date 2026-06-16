@@ -79,6 +79,39 @@ static LRESULT CALLBACK DashWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+// ---- 클래스 선택 화면 -------------------------------------------------------
+static void ScreenClassSelect(GameState& state) {
+    ImGui::Spacing();
+    ImGui::TextDisabled("직업을 선택하세요  (한 번 고르면 변경 불가)");
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    for (int i = 0; i < 3; i++) {
+        const ClassDef& c = kClasses[i];
+        ImGui::PushID(i);
+
+        // 직업 이름 버튼
+        if (ImGui::Button(c.name, {80, 48})) {
+            state.playerClass = (ClassType)(i + 1);
+            SaveGame(state);
+        }
+        ImGui::SameLine(100);
+
+        // 설명 블록
+        ImGui::BeginGroup();
+        ImGui::TextDisabled("%s", c.flavor);
+        ImGui::BulletText("%s", c.stat0);
+        ImGui::BulletText("%s", c.stat1);
+        ImGui::BulletText("%s", c.stat2);
+        ImGui::EndGroup();
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        ImGui::PopID();
+    }
+}
+
 // ---- 탭 UI 함수 ------------------------------------------------------------
 static void TabStatus(GameState& state) {
     ImGui::Spacing();
@@ -88,7 +121,9 @@ static void TabStatus(GameState& state) {
     ImGui::Spacing();
 
     char buf[64];
-    snprintf(buf, sizeof(buf), "Lv.%d", state.level);
+    const char* clsName = (state.playerClass != CLASS_NONE)
+                          ? kClasses[(int)state.playerClass - 1].name : "?";
+    snprintf(buf, sizeof(buf), "Lv.%d  [%s]", state.level, clsName);
     ImGui::Text("영웅");      ImGui::SameLine(100); ImGui::Text("%s", buf);
 
     ImGui::Spacing();
@@ -186,9 +221,31 @@ static void TabDungeon(GameState& state) {
     ImGui::Separator();
     ImGui::Spacing();
 
-    long long atk = (long long)state.level * 10;
-    ImGui::Text("공격력");  ImGui::SameLine(100); ImGui::Text("%lld / 틱", atk);
+    long long baseAtk = (long long)state.level * 10;
     ImGui::Text("스테이지"); ImGui::SameLine(100); ImGui::Text("%d", d.stage);
+
+    ImGui::Spacing();
+    switch (state.playerClass) {
+    case CLASS_WARRIOR:
+        ImGui::Text("공격력");  ImGui::SameLine(100);
+        if (d.bossStage)
+            ImGui::Text("%lld / 틱  (보스: %lld)", (long long)(baseAtk*1.5f), (long long)(baseAtk*3.0f));
+        else
+            ImGui::Text("%lld / 틱", (long long)(baseAtk * 1.5f));
+        break;
+    case CLASS_MAGE:
+        ImGui::Text("공격력");  ImGui::SameLine(100);
+        ImGui::Text("%lld 일반  /  %lld 폭발 (20%%)", (long long)(baseAtk*0.7f), (long long)(baseAtk*4.0f));
+        break;
+    case CLASS_ROGUE:
+        ImGui::Text("공격력");  ImGui::SameLine(100);
+        ImGui::Text("%lld x2 / 틱", baseAtk);
+        break;
+    default:
+        ImGui::Text("공격력");  ImGui::SameLine(100);
+        ImGui::Text("%lld / 틱", baseAtk);
+        break;
+    }
 }
 
 // ---- 공개 API --------------------------------------------------------------
@@ -275,10 +332,12 @@ void DashboardFrame(GameState& state) {
         ImGuiWindowFlags_NoMove      |
         ImGuiWindowFlags_NoSavedSettings);
 
-    if (ImGui::BeginTabBar("##tabs")) {
-        if (ImGui::BeginTabItem("현황"))    { TabStatus(state);   ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("업그레이드")) { TabUpgrade(state); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("던전"))    { TabDungeon(state);  ImGui::EndTabItem(); }
+    if (state.playerClass == CLASS_NONE) {
+        ScreenClassSelect(state);
+    } else if (ImGui::BeginTabBar("##tabs")) {
+        if (ImGui::BeginTabItem("현황"))       { TabStatus(state);  ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("업그레이드"))  { TabUpgrade(state); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("던전"))       { TabDungeon(state); ImGui::EndTabItem(); }
         ImGui::EndTabBar();
     }
 

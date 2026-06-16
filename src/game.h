@@ -1,6 +1,21 @@
 #pragma once
 #include <string>
 
+// ---- 클래스 -----------------------------------------------------------------
+enum ClassType { CLASS_NONE = 0, CLASS_WARRIOR, CLASS_MAGE, CLASS_ROGUE };
+
+struct ClassDef {
+    const char* name;
+    const char* flavor;   // 한 줄 컨셉
+    const char* stat0;    // 특성 설명 줄 1
+    const char* stat1;    // 특성 설명 줄 2
+    const char* stat2;    // 특성 설명 줄 3
+};
+
+// 인덱스 = ClassType - 1 (CLASS_NONE 제외)
+extern const ClassDef kClasses[3];
+
+// ---- 업그레이드 -------------------------------------------------------------
 enum UpgradeId { UP_XP = 0, UP_GOLD, UP_DROP, UP_COUNT };
 
 struct Upgrade {
@@ -20,6 +35,8 @@ struct Dungeon {
 };
 
 struct GameState {
+    ClassType playerClass = CLASS_NONE;
+
     int       level = 1;
     long long xp    = 0;
     long long gold  = 0;

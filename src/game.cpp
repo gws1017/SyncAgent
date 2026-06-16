@@ -78,14 +78,13 @@ std::wstring GameTick(GameState& state) {
         InitDungeonStage(state.dungeon);
     }
 
-    // 레벨업
+    // 레벨업 (대시보드 현황에만 표시, 알림 없음)
     while (state.xp >= state.xpForNext()) {
         state.xp -= state.xpForNext();
         state.level++;
         wchar_t buf[64];
         swprintf_s(buf, L"[sync] 레벨 %d 달성", state.level);
         state.lastEvent = buf;
-        if (notify.empty()) notify = buf;
     }
 
     // 아이템 드랍

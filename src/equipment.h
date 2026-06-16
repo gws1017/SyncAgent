@@ -3,7 +3,7 @@
 #include <string>
 
 enum class Grade { Common = 0, Rare, Epic, Legendary };
-enum class StatType { Attack = 0, Xp, Gold, Drop };
+enum class StatType { Attack = 0, Xp, Gold, Drop, Defense, Lifesteal, AtkSpeed, STAT_COUNT };
 
 struct Item {
     Grade    grade;

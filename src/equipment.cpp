@@ -18,10 +18,14 @@ const char* GradeName(Grade g) {
 
 const char* StatName(StatType s) {
     switch (s) {
-    case StatType::Attack: return "공격력";
-    case StatType::Xp:     return "XP";
-    case StatType::Gold:   return "골드";
-    case StatType::Drop:   return "드랍률";
+    case StatType::Attack:    return "공격력";
+    case StatType::Xp:        return "XP";
+    case StatType::Gold:      return "골드";
+    case StatType::Drop:      return "드랍률";
+    case StatType::Defense:   return "방어력";
+    case StatType::Lifesteal: return "체력흡수";
+    case StatType::AtkSpeed:  return "공격속도";
+    default: break;
     }
     return "?";
 }
@@ -38,10 +42,14 @@ const wchar_t* GradeNameW(Grade g) {
 
 const wchar_t* StatNameW(StatType s) {
     switch (s) {
-    case StatType::Attack: return L"공격력";
-    case StatType::Xp:     return L"XP";
-    case StatType::Gold:   return L"골드";
-    case StatType::Drop:   return L"드랍률";
+    case StatType::Attack:    return L"공격력";
+    case StatType::Xp:        return L"XP";
+    case StatType::Gold:      return L"골드";
+    case StatType::Drop:      return L"드랍률";
+    case StatType::Defense:   return L"방어력";
+    case StatType::Lifesteal: return L"체력흡수";
+    case StatType::AtkSpeed:  return L"공격속도";
+    default: break;
     }
     return L"?";
 }
@@ -69,7 +77,7 @@ static int SuccessRate(Grade g) {
 
 // ---- 아이템 생성 ------------------------------------------------------------
 Item MakeItem(Grade g) {
-    std::uniform_int_distribution<int> statRoll(0, 3);
+    std::uniform_int_distribution<int> statRoll(0, (int)StatType::STAT_COUNT - 1);
     return Item{ g, (StatType)statRoll(g_rng), BonusForGrade(g) };
 }
 
@@ -140,7 +148,7 @@ void DeserializeInventory(const std::string& data, Inventory& inv) {
             int g = 0, s = 0;
             if (sscanf_s(token.c_str(), "%d %d", &g, &s) == 2) {
                 Grade  grade = (Grade)std::clamp(g, 0, 3);
-                StatType stat = (StatType)std::clamp(s, 0, 3);
+                StatType stat = (StatType)std::clamp(s, 0, (int)StatType::STAT_COUNT - 1);
                 out.push_back({ grade, stat, BonusForGrade(grade) });
             }
         }

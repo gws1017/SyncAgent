@@ -5,7 +5,7 @@
 
 static constexpr UINT WM_TRAY    = WM_APP + 1;
 static constexpr UINT TIMER_TICK = 1;
-static constexpr UINT TICK_MS    = 3000;
+static constexpr UINT TICK_MS    = 5000;
 static constexpr UINT IDM_STATUS = 1001;
 static constexpr UINT IDM_QUIT   = 1002;
 static constexpr UINT IDI_APPICON = 101;

@@ -26,3 +26,6 @@ save.txt
 
 # Vendored dependency (own git repo, fetched separately)
 vendor/
+
+# Release packaging output
+dist/

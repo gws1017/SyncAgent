@@ -160,7 +160,7 @@ std::wstring GameTick(GameState& state) {
                    StatNameW(dropped.stat),
                    dropped.bonus * 100.0f);
         state.lastEvent = buf;
-        if (notify.empty()) notify = buf;
+        if (notify.empty() && dropped.grade >= Grade::Rare) notify = buf;
     }
 
     return notify;

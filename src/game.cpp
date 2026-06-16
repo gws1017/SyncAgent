@@ -72,7 +72,7 @@ std::wstring GameTick(GameState& state) {
         else
             swprintf_s(buf, L"[sync] 스테이지 %d 클리어 (+%lld G)", state.dungeon.stage, reward);
         state.lastEvent = buf;
-        notify = buf;
+        if (state.dungeon.bossStage) notify = buf; // 보스만 알림, 일반 클리어는 조용히
 
         state.dungeon.stage++;
         InitDungeonStage(state.dungeon);

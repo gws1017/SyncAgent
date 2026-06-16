@@ -369,12 +369,15 @@ bool DashboardInit(HINSTANCE hInst) {
     io.IniFilename = nullptr;
 
     // 한국어 폰트 로드 (맑은 고딕, 윈도우 10/11 기본 내장)
+    // 오버샘플 1x1로 낮춰 텍스처 아틀라스 크기 절감
     ImFontConfig cfg;
-    cfg.OversampleH = 2;
-    cfg.OversampleV = 2;
-    io.Fonts->AddFontFromFileTTF(
+    cfg.OversampleH = 1;
+    cfg.OversampleV = 1;
+    cfg.PixelSnapH  = true;
+    ImFont* font = io.Fonts->AddFontFromFileTTF(
         "C:\\Windows\\Fonts\\malgun.ttf", 15.0f, &cfg,
         io.Fonts->GetGlyphRangesKorean());
+    if (!font) io.Fonts->AddFontDefault();
 
     ImGui::StyleColorsDark();
     ImGuiStyle& s = ImGui::GetStyle();

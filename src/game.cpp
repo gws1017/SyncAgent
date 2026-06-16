@@ -155,9 +155,9 @@ std::wstring GameTick(GameState& state) {
             state.inventory.items.push_back(dropped);
         }
         wchar_t buf[64];
-        swprintf_s(buf, L"[sync] %S 아이템 획득 (%S +%.0f%%)",
-                   GradeName(dropped.grade),
-                   StatName(dropped.stat),
+        swprintf_s(buf, L"[sync] %s 아이템 획득 (%s +%.0f%%)",
+                   GradeNameW(dropped.grade),
+                   StatNameW(dropped.stat),
                    dropped.bonus * 100.0f);
         state.lastEvent = buf;
         if (notify.empty()) notify = buf;

@@ -26,6 +26,26 @@ const char* StatName(StatType s) {
     return "?";
 }
 
+const wchar_t* GradeNameW(Grade g) {
+    switch (g) {
+    case Grade::Common:    return L"일반";
+    case Grade::Rare:      return L"희귀";
+    case Grade::Epic:      return L"영웅";
+    case Grade::Legendary: return L"전설";
+    }
+    return L"?";
+}
+
+const wchar_t* StatNameW(StatType s) {
+    switch (s) {
+    case StatType::Attack: return L"공격력";
+    case StatType::Xp:     return L"XP";
+    case StatType::Gold:   return L"골드";
+    case StatType::Drop:   return L"드랍률";
+    }
+    return L"?";
+}
+
 // 등급별 스탯 보너스
 static float BonusForGrade(Grade g) {
     switch (g) {

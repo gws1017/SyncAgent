@@ -29,8 +29,10 @@ void     Unequip(Inventory& inv, int equipIdx);
 // 장착된 아이템에서 스탯 합산
 float    GetEquippedBonus(const Inventory& inv, StatType stat);
 
-const char* GradeName(Grade g);
-const char* StatName(StatType s);
+const char*    GradeName(Grade g);
+const char*    StatName(StatType s);
+const wchar_t* GradeNameW(Grade g);
+const wchar_t* StatNameW(StatType s);
 
 // 저장/불러오기용
 std::string  SerializeInventory(const Inventory& inv);

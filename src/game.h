@@ -90,6 +90,7 @@ struct GameState {
     long long playerHp       = 200;
     long long playerMaxHp    = 200;
     long long lastHealAmount = 0; // 이번 틱 체력흡수 회복량 (표시용, 저장 안 함)
+    long long deathCount     = 0; // 전투 중 체력 0이 되어 초기화된 횟수 (이번 캐릭터 기준)
 
     // 위장 시간 기록 — 백그라운드로 켜놓은 누적 시간 / 대시보드를 열어본 누적 시간
     double totalRunSec      = 0.0;

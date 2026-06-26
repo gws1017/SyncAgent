@@ -146,6 +146,7 @@ static void TabStatus(GameState& state) {
     ImGui::TextDisabled("위장 기록");
     ImGui::Text("몰래 가동");    ImGui::SameLine(140); ImGui::Text("%s  (트레이에 숨어서 돈 시간)", runBuf);
     ImGui::Text("대시보드 노출"); ImGui::SameLine(140); ImGui::Text("%s  (들킬 뻔한 시간)", dashBuf);
+    ImGui::Text("사망 횟수");    ImGui::SameLine(140); ImGui::Text("%lld 회  (이번 캐릭터 기준)", state.deathCount);
 }
 
 static void TabUpgrade(GameState& state) {

@@ -53,8 +53,8 @@ const Talent kTalentDefs[3][TAL_COUNT] = {
     },
     { // 마법사 — 불안정한 폭딜, 자가 회복으로 보완
         { "마나 증폭 (패시브)",   "폭발 데미지 +15% / 포인트",   0, 10 },
-        { "주문 가속 (패시브)",   "폭발 확률 +2%p / 포인트",     0, 10 },
-        { "마력 순환 (패시브)",   "체력흡수 +3% / 포인트",       0, 10 },
+        { "마력 폭주 (패시브)",   "폭발 확률 +2%p / 포인트",     0, 10 },
+        { "마나 흡혈 (패시브)",   "체력흡수 +3% / 포인트",       0, 10 },
     },
     { // 도적 — 빠르고 잘 피하는 다회타
         { "연속 공격 (패시브)",   "공격속도 +10% / 포인트",      0, 10 },
@@ -83,8 +83,8 @@ TalentBonuses ComputeTalentBonuses(const GameState& state) {
         break;
     case CLASS_MAGE:
         b.critDmgBonus    = state.talents[TAL_0].level * 0.15f; // 마나 증폭
-        b.critChanceBonus = state.talents[TAL_1].level * 2.0f;  // 주문 가속
-        b.lifestealBonus  = state.talents[TAL_2].level * 0.03f; // 마력 순환
+        b.critChanceBonus = state.talents[TAL_1].level * 2.0f;  // 마력 폭주
+        b.lifestealBonus  = state.talents[TAL_2].level * 0.03f; // 마나 흡혈
         break;
     case CLASS_ROGUE:
         b.atkSpeedBonus  = state.talents[TAL_0].level * 0.10f; // 연속 공격
@@ -287,7 +287,7 @@ std::wstring GameTick(GameState& state) {
         }
         break;
     case CLASS_MAGE: {
-        float critChance = std::min(100.0f, 20.0f + tal.critChanceBonus); // 주문 가속
+        float critChance = std::min(100.0f, 20.0f + tal.critChanceBonus); // 마력 폭주
         float critMult    = 4.0f + tal.critDmgBonus;                      // 마나 증폭
         std::uniform_real_distribution<float> critRoll(0.0f, 100.0f);
         totalDmg = (critRoll(g_rng) <= critChance)
@@ -320,7 +320,7 @@ std::wstring GameTick(GameState& state) {
     totalDmg = std::max(0LL, totalDmg - enemyDef);
     state.dungeon.enemyHp -= totalDmg;
 
-    // 체력흡수 — 실제로 들어간 데미지 기준으로 회복 (장비 + 마법사 마력 순환)
+    // 체력흡수 — 실제로 들어간 데미지 기준으로 회복 (장비 + 마법사 마나 흡혈)
     float lifestealPct = GetEquippedBonus(state.inventory, StatType::Lifesteal) + tal.lifestealBonus;
     state.lastHealAmount = 0;
     if (totalDmg > 0 && lifestealPct > 0.0f) {
@@ -358,6 +358,7 @@ std::wstring GameTick(GameState& state) {
     if (state.playerHp <= 0) {
         state.playerHp = state.playerMaxHp;
         state.dungeon.enemyHp = state.dungeon.enemyMaxHp;
+        state.deathCount++;
         state.lastEvent = L"[sync] 패배 — 전투 초기화. 방어력/체력흡수를 보강하세요.";
         // 막혀서 매 틱 죽는 상황에선 알림이 도배되므로 토스트는 띄우지 않음
     }
@@ -411,7 +412,7 @@ void SaveGame(const GameState& state) {
     fprintf(f, "%s\n", inv.c_str());
     fprintf(f, "%d ", state.talentPoints);
     for (int i = 0; i < TAL_COUNT; i++) fprintf(f, "%d ", state.talents[i].level);
-    fprintf(f, "\n%.0f %.0f\n", state.totalRunSec, state.dashboardOpenSec);
+    fprintf(f, "\n%.0f %.0f %lld\n", state.totalRunSec, state.dashboardOpenSec, state.deathCount);
     fclose(f);
 }
 
@@ -444,10 +445,13 @@ void LoadGame(GameState& state) {
                 fscanf(f, "%d", &state.talents[i].level);
         }
         double runSec = 0.0, dashSec = 0.0;
-        if (fscanf(f, "%lf %lf", &runSec, &dashSec) == 2) {
+        long long deaths = 0;
+        int n = fscanf(f, "%lf %lf %lld", &runSec, &dashSec, &deaths);
+        if (n >= 2) {
             state.totalRunSec      = runSec;
             state.dashboardOpenSec = dashSec;
         }
+        if (n >= 3) state.deathCount = deaths;
     } else {
         state = GameState{};
         InitUpgrades(state);

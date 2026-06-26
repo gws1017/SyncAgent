@@ -229,17 +229,9 @@ static void TabUpgrade(GameState& state) {
     if (!confirmReset) ImGui::EndDisabled();
 }
 
-static void TabTalent(GameState& state) {
-    ImGui::Spacing();
-    int spent = state.talents[TAL_0].level + state.talents[TAL_1].level + state.talents[TAL_2].level;
-    ImGui::TextDisabled("레벨업마다 1포인트 지급. 평생 최대 %d포인트 — 3개 다 풀업(30)은 불가능, 골라서 투자.",
-                         MAX_TALENT_POINTS);
-    ImGui::Text("보유 포인트"); ImGui::SameLine(120); ImGui::Text("%d", state.talentPoints);
-    ImGui::Text("누적 (보유+투자)"); ImGui::SameLine(120); ImGui::Text("%d / %d", state.talentPoints + spent, MAX_TALENT_POINTS);
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    for (int i = 0; i < TAL_COUNT; i++) {
+// slotStart..slotStart+count-1 구간의 특성 목록을 그려주는 공용 헬퍼 (1차/2차 공용)
+static void DrawTalentRows(GameState& state, int slotStart, int count, int& pool) {
+    for (int i = slotStart; i < slotStart + count; i++) {
         Talent& t = state.talents[i];
         ImGui::PushID(i);
 
@@ -255,7 +247,7 @@ static void TabTalent(GameState& state) {
 
         ImGui::SameLine();
         bool maxed = (t.level >= t.maxLevel);
-        bool canInvest = !maxed && state.talentPoints > 0;
+        bool canInvest = !maxed && pool > 0;
         if (!canInvest) ImGui::BeginDisabled();
         if (ImGui::Button(maxed ? "MAX" : "+1 투자", {90, 0}))
             InvestTalent(state, i);
@@ -263,6 +255,37 @@ static void TabTalent(GameState& state) {
 
         ImGui::Spacing();
         ImGui::PopID();
+    }
+}
+
+static void TabTalent(GameState& state) {
+    ImGui::Spacing();
+    int spent1 = state.talents[TAL_0].level + state.talents[TAL_1].level + state.talents[TAL_2].level;
+    ImGui::TextDisabled("1차 특성  —  레벨업마다 1포인트, 평생 최대 %d포인트 (3개 다 풀업은 불가능)",
+                         MAX_TALENT_POINTS);
+    ImGui::Text("보유 포인트"); ImGui::SameLine(140); ImGui::Text("%d", state.talentPoints);
+    ImGui::Text("누적 (보유+투자)"); ImGui::SameLine(140); ImGui::Text("%d / %d", state.talentPoints + spent1, MAX_TALENT_POINTS);
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    DrawTalentRows(state, TAL_0, TIER1_TAL_COUNT, state.talentPoints);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    if (state.level < TIER2_LEVEL_REQ) {
+        ImGui::TextDisabled("2차 특성  —  레벨 %d부터 해금 (현재 Lv.%d)", TIER2_LEVEL_REQ, state.level);
+    } else {
+        int spent2 = state.talents[TAL_3].level + state.talents[TAL_4].level + state.talents[TAL_5].level;
+        ImGui::TextDisabled("2차 특성  —  레벨업마다 1포인트, 평생 최대 %d포인트 (1차와 별도 풀)",
+                             MAX_TALENT_POINTS_T2);
+        ImGui::Text("보유 포인트"); ImGui::SameLine(140); ImGui::Text("%d", state.talentPoints2);
+        ImGui::Text("누적 (보유+투자)"); ImGui::SameLine(140); ImGui::Text("%d / %d", state.talentPoints2 + spent2, MAX_TALENT_POINTS_T2);
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        DrawTalentRows(state, TAL_3, TIER2_TAL_COUNT, state.talentPoints2);
     }
 }
 
@@ -579,14 +602,20 @@ void DashboardFrame(GameState& state) {
         ImGuiWindowFlags_NoMove      |
         ImGuiWindowFlags_NoSavedSettings);
 
+    auto TabScrollable = [](const char* id, void (*fn)(GameState&), GameState& s) {
+        ImGui::BeginChild(id, {0, 0}, false);
+        fn(s);
+        ImGui::EndChild();
+    };
+
     if (state.playerClass == CLASS_NONE) {
         ScreenClassSelect(state);
     } else if (ImGui::BeginTabBar("##tabs")) {
-        if (ImGui::BeginTabItem("현황"))       { TabStatus(state);    ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("업그레이드"))  { TabUpgrade(state);   ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("특성"))       { TabTalent(state);    ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("던전"))       { TabDungeon(state);   ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("장비"))       { TabEquipment(state); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("현황"))       { TabScrollable("##s1", TabStatus,    state); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("업그레이드"))  { TabScrollable("##s2", TabUpgrade,   state); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("특성"))       { TabScrollable("##s3", TabTalent,    state); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("던전"))       { TabScrollable("##s4", TabDungeon,   state); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("장비"))       { TabScrollable("##s5", TabEquipment, state); ImGui::EndTabItem(); }
         ImGui::EndTabBar();
     }
 

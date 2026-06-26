@@ -42,24 +42,33 @@ static void InitUpgrades(GameState& state) {
 }
 
 // ---- 특성 -------------------------------------------------------------------
-// 레벨업마다 1포인트 지급. 3가지 다 최대까지 찍으려면 30포인트가 필요해서
-// (느려진 XP 곡선 기준) 항상 부족하게 만들어 투자 선택을 강제함.
+// 1차(슬롯 0~2): 레벨업마다 1포인트, 평생 15포인트 캡 (3개 다 풀업하는 30보다 적음).
+// 2차(슬롯 3~5): 25레벨부터 별도 풀로 1포인트씩, 마찬가지로 평생 15포인트 캡.
 // 클래스 컨셉에 맞춰 슬롯별 효과가 다름 (전사=탱커, 마법사=폭딜+자가회복, 도적=회피+다회타).
 const Talent kTalentDefs[3][TAL_COUNT] = {
     { // 전사 — 단단한 근접 탱커
         { "철벽 방어 (패시브)",   "방어력 +10% / 포인트", 0, 10 },
         { "전장의 분노 (패시브)", "공격력 +8% / 포인트",  0, 10 },
         { "처단자 (패시브)",      "보스 데미지 +15% / 포인트", 0, 10 },
+        { "불굴의 의지 (패시브)", "최대체력 +5% / 포인트", 0, 10 },
+        { "광전사 (패시브)",      "공격력 +6% / 포인트",   0, 10 },
+        { "수호자 (패시브)",      "방어력 +8% / 포인트",   0, 10 },
     },
     { // 마법사 — 불안정한 폭딜, 자가 회복으로 보완
         { "마나 증폭 (패시브)",   "폭발 데미지 +15% / 포인트",   0, 10 },
         { "마력 폭주 (패시브)",   "폭발 확률 +2%p / 포인트",     0, 10 },
         { "마나 흡혈 (패시브)",   "체력흡수 +3% / 포인트",       0, 10 },
+        { "마나 코어 (패시브)",   "최대체력 +5% / 포인트",       0, 10 },
+        { "원소 폭발 (패시브)",   "폭발 데미지 +10% / 포인트",   0, 10 },
+        { "흡혼 (패시브)",        "체력흡수 +2% / 포인트",       0, 10 },
     },
     { // 도적 — 빠르고 잘 피하는 다회타
         { "연속 공격 (패시브)",   "공격속도 +10% / 포인트",      0, 10 },
         { "기습 (확률)",          "추가 공격 확률 +4%p / 포인트", 0, 10 },
         { "은신 회피 (패시브)",   "받는 피해 -5% / 포인트",       0, 10 },
+        { "쾌속 (패시브)",        "공격속도 +6% / 포인트",        0, 10 },
+        { "치명적 기습 (확률)",   "추가 공격 확률 +3%p / 포인트", 0, 10 },
+        { "야성 (패시브)",        "받는 피해 -4% / 포인트",       0, 10 },
     },
 };
 
@@ -80,16 +89,25 @@ TalentBonuses ComputeTalentBonuses(const GameState& state) {
         b.defenseBonus = state.talents[TAL_0].level * 0.10f; // 철벽 방어
         b.atkBonus     = state.talents[TAL_1].level * 0.08f; // 전장의 분노
         b.bossDmgBonus = state.talents[TAL_2].level * 0.15f; // 처단자
+        b.hpBonus      = state.talents[TAL_3].level * 0.05f; // 불굴의 의지
+        b.atkBonus    += state.talents[TAL_4].level * 0.06f; // 광전사
+        b.defenseBonus+= state.talents[TAL_5].level * 0.08f; // 수호자
         break;
     case CLASS_MAGE:
         b.critDmgBonus    = state.talents[TAL_0].level * 0.15f; // 마나 증폭
         b.critChanceBonus = state.talents[TAL_1].level * 2.0f;  // 마력 폭주
         b.lifestealBonus  = state.talents[TAL_2].level * 0.03f; // 마나 흡혈
+        b.hpBonus         = state.talents[TAL_3].level * 0.05f; // 마나 코어
+        b.critDmgBonus   += state.talents[TAL_4].level * 0.10f; // 원소 폭발
+        b.lifestealBonus += state.talents[TAL_5].level * 0.02f; // 흡혼
         break;
     case CLASS_ROGUE:
         b.atkSpeedBonus  = state.talents[TAL_0].level * 0.10f; // 연속 공격
         b.extraAtkChance = state.talents[TAL_1].level * 4.0f;  // 기습
         b.evasionBonus   = state.talents[TAL_2].level * 0.05f; // 은신 회피
+        b.atkSpeedBonus += state.talents[TAL_3].level * 0.06f; // 쾌속
+        b.extraAtkChance+= state.talents[TAL_4].level * 3.0f;  // 치명적 기습
+        b.evasionBonus  += state.talents[TAL_5].level * 0.04f; // 야성
         break;
     default:
         break;
@@ -188,10 +206,13 @@ bool PurchaseUpgrade(GameState& state, int id) {
 
 bool InvestTalent(GameState& state, int id) {
     if (id < 0 || id >= TAL_COUNT) return false;
+    bool isTier2 = id >= TIER1_TAL_COUNT;
+    if (isTier2 && state.level < TIER2_LEVEL_REQ) return false; // 2차는 25레벨부터
+    int& pool = isTier2 ? state.talentPoints2 : state.talentPoints;
     Talent& t = state.talents[id];
     if (t.level >= t.maxLevel) return false;
-    if (state.talentPoints <= 0) return false;
-    state.talentPoints--;
+    if (pool <= 0) return false;
+    pool--;
     t.level++;
     return true;
 }
@@ -260,15 +281,16 @@ std::wstring GameTick(GameState& state) {
 
     std::wstring notify;
 
-    // 플레이어 체력 — 스테이지에 따라 소폭 성장 + 프레스티지마다 추가 증가
-    long long maxHp = PlayerBaseMaxHp(state.dungeon.stage, state.prestigeCount);
+    TalentBonuses tal = ComputeTalentBonuses(state);
+
+    // 플레이어 체력 — 스테이지에 따라 소폭 성장 + 프레스티지마다 추가 증가 + 2차 특성 보너스
+    long long maxHp = (long long)(PlayerBaseMaxHp(state.dungeon.stage, state.prestigeCount) * (1.0f + tal.hpBonus));
     state.playerMaxHp = maxHp;
     if (state.playerHp <= 0 || state.playerHp > maxHp) state.playerHp = maxHp;
 
     // 던전 전투 — 클래스별 공격 방식
     // 공격력 기반값은 몹보다 느리게 스테이지를 따라 성장하고, 그 위에
     // 투자(업그레이드/장비/프레스티지/특성)가 곱연산으로 얹힘 — 투자가 여전히 핵심.
-    TalentBonuses tal = ComputeTalentBonuses(state);
     float atkMult = 1.0f + GetEquippedBonus(state.inventory, StatType::Attack)
                          + state.prestigeCount * PRESTIGE_ATK_BONUS
                          + state.upgrades[UP_ATK].level * state.upgrades[UP_ATK].multiplier
@@ -363,19 +385,35 @@ std::wstring GameTick(GameState& state) {
         // 막혀서 매 틱 죽는 상황에선 알림이 도배되므로 토스트는 띄우지 않음
     }
 
-    // 레벨업 (대시보드 현황에만 표시, 알림 없음) — 레벨업마다 특성 포인트 1개 지급
-    // 단, 평생 받는 포인트는 MAX_TALENT_POINTS로 캡 (3개 다 풀업하는 30보다 적게)
+    // 레벨업 (대시보드 현황에만 표시, 알림 없음) — 레벨업마다 1차 특성 포인트 1개,
+    // 25레벨부터는 2차 특성 포인트도 1개 추가 지급. 각각 평생 캡(15)까지만.
     while (state.xp >= state.xpForNext()) {
         state.xp -= state.xpForNext();
         state.level++;
-        int spent = state.talents[TAL_0].level + state.talents[TAL_1].level + state.talents[TAL_2].level;
-        wchar_t buf[64];
-        if (state.talentPoints + spent < MAX_TALENT_POINTS) {
+
+        int spent1 = state.talents[TAL_0].level + state.talents[TAL_1].level + state.talents[TAL_2].level;
+        bool gotTier1 = false, gotTier2 = false;
+        if (state.talentPoints + spent1 < MAX_TALENT_POINTS) {
             state.talentPoints++;
-            swprintf(buf, 64, L"[sync] 레벨 %d 달성 (특성 포인트 +1)", state.level);
-        } else {
-            swprintf(buf, 64, L"[sync] 레벨 %d 달성", state.level);
+            gotTier1 = true;
         }
+        if (state.level >= TIER2_LEVEL_REQ) {
+            int spent2 = state.talents[TAL_3].level + state.talents[TAL_4].level + state.talents[TAL_5].level;
+            if (state.talentPoints2 + spent2 < MAX_TALENT_POINTS_T2) {
+                state.talentPoints2++;
+                gotTier2 = true;
+            }
+        }
+
+        wchar_t buf[64];
+        if (gotTier1 && gotTier2)
+            swprintf(buf, 64, L"[sync] 레벨 %d 달성 (특성 포인트 +1, 2차 +1)", state.level);
+        else if (gotTier1)
+            swprintf(buf, 64, L"[sync] 레벨 %d 달성 (특성 포인트 +1)", state.level);
+        else if (gotTier2)
+            swprintf(buf, 64, L"[sync] 레벨 %d 달성 (2차 특성 포인트 +1)", state.level);
+        else
+            swprintf(buf, 64, L"[sync] 레벨 %d 달성", state.level);
         state.lastEvent = buf;
     }
 
@@ -384,16 +422,21 @@ std::wstring GameTick(GameState& state) {
     std::uniform_int_distribution<int> roll(1, 100);
     if (roll(g_rng) <= dropChance) {
         Item dropped = MakeItem(RollDropGrade(state.dungeon.stage));
+        wchar_t buf[80];
         if ((int)state.inventory.items.size() < Inventory::MAX_ITEMS) {
             state.inventory.items.push_back(dropped);
+            swprintf(buf, 80, L"[sync] %s 아이템 획득 (%s +%.0f%%)",
+                     GradeNameW(dropped.grade),
+                     StatNameW(dropped.stat),
+                     dropped.bonus * 100.0f);
+            state.lastEvent = buf;
+            if (notify.empty() && dropped.grade >= Grade::Rare) notify = buf;
+        } else {
+            // 보관함이 가득 차서 드랍이 그대로 버려짐 — 놓치고 있다는 걸 알려줘야 함
+            swprintf(buf, 80, L"[sync] 보관함 가득 참 — %s 아이템을 놓쳤습니다!", GradeNameW(dropped.grade));
+            state.lastEvent = buf;
+            if (notify.empty()) notify = buf;
         }
-        wchar_t buf[64];
-        swprintf(buf, 64, L"[sync] %s 아이템 획득 (%s +%.0f%%)",
-                 GradeNameW(dropped.grade),
-                 StatNameW(dropped.stat),
-                 dropped.bonus * 100.0f);
-        state.lastEvent = buf;
-        if (notify.empty() && dropped.grade >= Grade::Rare) notify = buf;
     }
 
     return notify;
@@ -402,9 +445,15 @@ std::wstring GameTick(GameState& state) {
 // ---- 저장 / 불러오기 ---------------------------------------------------------
 // 경로 탐색은 platform.h 뒤로 위임 (OS별 구현은 platform_win.cpp 등)
 
+// 세이브 포맷이 바뀔 때마다 올림. 필드 개수/순서가 바뀌면 옛 세이브를 새 코드로
+// 읽다가 값이 한 칸씩 밀려서 깨지는 사고가 반복됐기 때문에(유물 제거, 2차 특성
+// 추가 등) 버전이 안 맞으면 그냥 새 게임으로 시작하도록 강제한다.
+static constexpr int SAVE_FORMAT_VERSION = 2;
+
 void SaveGame(const GameState& state) {
     FILE* f = OpenSaveFileForWrite();
     if (!f) return;
+    fprintf(f, "%d\n", SAVE_FORMAT_VERSION);
     fprintf(f, "%d %lld %lld\n", state.level, state.xp, state.gold);
     for (int i = 0; i < UP_COUNT; i++) fprintf(f, "%d ", state.upgrades[i].level);
     fprintf(f, "\n%d\n%d\n%d\n", state.dungeon.stage, (int)state.playerClass, state.prestigeCount);
@@ -412,7 +461,7 @@ void SaveGame(const GameState& state) {
     fprintf(f, "%s\n", inv.c_str());
     fprintf(f, "%d ", state.talentPoints);
     for (int i = 0; i < TAL_COUNT; i++) fprintf(f, "%d ", state.talents[i].level);
-    fprintf(f, "\n%.0f %.0f %lld\n", state.totalRunSec, state.dashboardOpenSec, state.deathCount);
+    fprintf(f, "\n%.0f %.0f %lld %d\n", state.totalRunSec, state.dashboardOpenSec, state.deathCount, state.talentPoints2);
     fclose(f);
 }
 
@@ -420,6 +469,15 @@ void LoadGame(GameState& state) {
     InitUpgrades(state);
     FILE* f = OpenSaveFileForRead();
     if (!f) return;
+    int version = 0;
+    if (fscanf(f, "%d", &version) != 1 || version != SAVE_FORMAT_VERSION) {
+        // 버전이 없거나(구버전 세이브) 안 맞으면 필드가 밀려서 깨질 수 있으니
+        // 파싱을 시도하지 않고 그냥 새 게임으로 시작한다.
+        state = GameState{};
+        InitUpgrades(state);
+        fclose(f);
+        return;
+    }
     if (fscanf(f, "%d %lld %lld",
                &state.level, &state.xp, &state.gold) == 3) {
         for (int i = 0; i < UP_COUNT; i++)
@@ -446,12 +504,14 @@ void LoadGame(GameState& state) {
         }
         double runSec = 0.0, dashSec = 0.0;
         long long deaths = 0;
-        int n = fscanf(f, "%lf %lf %lld", &runSec, &dashSec, &deaths);
+        int talPts2 = 0;
+        int n = fscanf(f, "%lf %lf %lld %d", &runSec, &dashSec, &deaths, &talPts2);
         if (n >= 2) {
             state.totalRunSec      = runSec;
             state.dashboardOpenSec = dashSec;
         }
         if (n >= 3) state.deathCount = deaths;
+        if (n >= 4) state.talentPoints2 = talPts2;
     } else {
         state = GameState{};
         InitUpgrades(state);

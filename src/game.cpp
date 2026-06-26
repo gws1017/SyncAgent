@@ -2,9 +2,13 @@
 #include "equipment.h"
 #include "platform.h"
 #include <cstdio>
+#include <cstdlib>
 #include <cmath>
 #include <random>
 #include <algorithm>
+#include <map>
+#include <sstream>
+#include <string>
 
 static std::mt19937 g_rng{ std::random_device{}() };
 
@@ -444,77 +448,122 @@ std::wstring GameTick(GameState& state) {
 
 // ---- 저장 / 불러오기 ---------------------------------------------------------
 // 경로 탐색은 platform.h 뒤로 위임 (OS별 구현은 platform_win.cpp 등)
+//
+// key=value 한 줄씩 저장하는 포맷. 자릿수 기반(위치로 필드를 구분하는) 포맷은
+// 필드를 추가/삭제할 때마다 옛 세이브를 읽으면 값이 한 칸씩 밀려서 깨지는
+// 사고가 반복됐다(유물 제거, 2차 특성 추가 때 모두 발생). key=value는 옛
+// 세이브에 없는 키를 만나도 그냥 기본값을 쓰면 되므로, 필드를 추가해도 기존
+// 진행 상황(레벨/장비/특성 등)이 사라지지 않는다.
 
-// 세이브 포맷이 바뀔 때마다 올림. 필드 개수/순서가 바뀌면 옛 세이브를 새 코드로
-// 읽다가 값이 한 칸씩 밀려서 깨지는 사고가 반복됐기 때문에(유물 제거, 2차 특성
-// 추가 등) 버전이 안 맞으면 그냥 새 게임으로 시작하도록 강제한다.
-static constexpr int SAVE_FORMAT_VERSION = 2;
+static void WriteKV(FILE* f, const char* key, long long v)        { fprintf(f, "%s=%lld\n", key, v); }
+static void WriteKV(FILE* f, const char* key, double v)            { fprintf(f, "%s=%.0f\n", key, v); }
+static void WriteKV(FILE* f, const char* key, const std::string& v) { fprintf(f, "%s=%s\n", key, v.c_str()); }
+
+static std::string JoinInts(const int* vals, int count) {
+    std::string s;
+    for (int i = 0; i < count; i++) {
+        if (i) s += ',';
+        s += std::to_string(vals[i]);
+    }
+    return s;
+}
 
 void SaveGame(const GameState& state) {
     FILE* f = OpenSaveFileForWrite();
     if (!f) return;
-    fprintf(f, "%d\n", SAVE_FORMAT_VERSION);
-    fprintf(f, "%d %lld %lld\n", state.level, state.xp, state.gold);
-    for (int i = 0; i < UP_COUNT; i++) fprintf(f, "%d ", state.upgrades[i].level);
-    fprintf(f, "\n%d\n%d\n%d\n", state.dungeon.stage, (int)state.playerClass, state.prestigeCount);
-    std::string inv = SerializeInventory(state.inventory);
-    fprintf(f, "%s\n", inv.c_str());
-    fprintf(f, "%d ", state.talentPoints);
-    for (int i = 0; i < TAL_COUNT; i++) fprintf(f, "%d ", state.talents[i].level);
-    fprintf(f, "\n%.0f %.0f %lld %d\n", state.totalRunSec, state.dashboardOpenSec, state.deathCount, state.talentPoints2);
+
+    WriteKV(f, "level", (long long)state.level);
+    WriteKV(f, "xp", state.xp);
+    WriteKV(f, "gold", state.gold);
+    WriteKV(f, "stage", (long long)state.dungeon.stage);
+    WriteKV(f, "class", (long long)state.playerClass);
+    WriteKV(f, "prestige", (long long)state.prestigeCount);
+    WriteKV(f, "talentPoints", (long long)state.talentPoints);
+    WriteKV(f, "talentPoints2", (long long)state.talentPoints2);
+    WriteKV(f, "totalRunSec", state.totalRunSec);
+    WriteKV(f, "dashboardOpenSec", state.dashboardOpenSec);
+    WriteKV(f, "deathCount", state.deathCount);
+
+    int upLevels[UP_COUNT];
+    for (int i = 0; i < UP_COUNT; i++) upLevels[i] = state.upgrades[i].level;
+    WriteKV(f, "upgrades", JoinInts(upLevels, UP_COUNT));
+
+    int talLevels[TAL_COUNT];
+    for (int i = 0; i < TAL_COUNT; i++) talLevels[i] = state.talents[i].level;
+    WriteKV(f, "talents", JoinInts(talLevels, TAL_COUNT));
+
+    WriteKV(f, "inventory", SerializeInventory(state.inventory));
     fclose(f);
+}
+
+// 파일 전체를 key=value 맵으로 읽어들임. 모르는 키나 줄 형식이 이상한 줄은 그냥 무시.
+static std::map<std::string, std::string> ReadKVFile(FILE* f) {
+    std::map<std::string, std::string> kv;
+    char line[4096];
+    while (fgets(line, sizeof(line), f)) {
+        std::string s(line);
+        while (!s.empty() && (s.back() == '\n' || s.back() == '\r')) s.pop_back();
+        size_t eq = s.find('=');
+        if (eq == std::string::npos) continue;
+        kv[s.substr(0, eq)] = s.substr(eq + 1);
+    }
+    return kv;
+}
+
+static long long KVLL(const std::map<std::string, std::string>& kv, const char* key, long long def) {
+    auto it = kv.find(key);
+    if (it == kv.end() || it->second.empty()) return def;
+    return strtoll(it->second.c_str(), nullptr, 10);
+}
+static double KVDouble(const std::map<std::string, std::string>& kv, const char* key, double def) {
+    auto it = kv.find(key);
+    if (it == kv.end() || it->second.empty()) return def;
+    return strtod(it->second.c_str(), nullptr);
+}
+static void KVIntList(const std::map<std::string, std::string>& kv, const char* key, int* out, int count) {
+    auto it = kv.find(key);
+    if (it == kv.end()) return;
+    std::istringstream ss(it->second);
+    std::string tok;
+    for (int i = 0; i < count && std::getline(ss, tok, ','); i++)
+        out[i] = atoi(tok.c_str());
 }
 
 void LoadGame(GameState& state) {
     InitUpgrades(state);
     FILE* f = OpenSaveFileForRead();
     if (!f) return;
-    int version = 0;
-    if (fscanf(f, "%d", &version) != 1 || version != SAVE_FORMAT_VERSION) {
-        // 버전이 없거나(구버전 세이브) 안 맞으면 필드가 밀려서 깨질 수 있으니
-        // 파싱을 시도하지 않고 그냥 새 게임으로 시작한다.
-        state = GameState{};
-        InitUpgrades(state);
-        fclose(f);
-        return;
-    }
-    if (fscanf(f, "%d %lld %lld",
-               &state.level, &state.xp, &state.gold) == 3) {
-        for (int i = 0; i < UP_COUNT; i++)
-            fscanf(f, "%d", &state.upgrades[i].level);
-        int cls = 0;
-        fscanf(f, "%d%d%d", &state.dungeon.stage, &cls, &state.prestigeCount);
-        if (cls < CLASS_NONE || cls > CLASS_ROGUE) {
-            // 구버전 포맷의 세이브 등으로 필드가 밀려서 깨진 값이 들어온 경우 —
-            // 잘못된 클래스로 특성 테이블을 범위 밖으로 읽으면 크래시로 이어지므로
-            // 깨진 세이브는 폐기하고 새 게임으로 안전하게 시작한다.
-            state = GameState{};
-            InitUpgrades(state);
-            fclose(f);
-            return;
-        }
-        state.playerClass = (ClassType)cls;
-        InitTalentsForClass(state);
-        char invBuf[4096] = {};
-        if (fscanf(f, " %4095[^\n]", invBuf) == 1)
-            DeserializeInventory(invBuf, state.inventory);
-        if (fscanf(f, "%d", &state.talentPoints) == 1) {
-            for (int i = 0; i < TAL_COUNT; i++)
-                fscanf(f, "%d", &state.talents[i].level);
-        }
-        double runSec = 0.0, dashSec = 0.0;
-        long long deaths = 0;
-        int talPts2 = 0;
-        int n = fscanf(f, "%lf %lf %lld %d", &runSec, &dashSec, &deaths, &talPts2);
-        if (n >= 2) {
-            state.totalRunSec      = runSec;
-            state.dashboardOpenSec = dashSec;
-        }
-        if (n >= 3) state.deathCount = deaths;
-        if (n >= 4) state.talentPoints2 = talPts2;
-    } else {
-        state = GameState{};
-        InitUpgrades(state);
-    }
+    std::map<std::string, std::string> kv = ReadKVFile(f);
     fclose(f);
+    if (kv.empty()) return; // 새 세이브 (또는 옛 포맷) — 기본 GameState로 시작
+
+    state.level         = (int)KVLL(kv, "level", 1);
+    state.xp             = KVLL(kv, "xp", 0);
+    state.gold           = KVLL(kv, "gold", 0);
+    state.dungeon.stage  = (int)KVLL(kv, "stage", 1);
+    state.prestigeCount  = (int)KVLL(kv, "prestige", 0);
+    state.talentPoints   = (int)KVLL(kv, "talentPoints", 0);
+    state.talentPoints2  = (int)KVLL(kv, "talentPoints2", 0);
+    state.totalRunSec      = KVDouble(kv, "totalRunSec", 0.0);
+    state.dashboardOpenSec = KVDouble(kv, "dashboardOpenSec", 0.0);
+    state.deathCount        = KVLL(kv, "deathCount", 0);
+
+    long long cls = KVLL(kv, "class", CLASS_NONE);
+    if (cls < CLASS_NONE || cls > CLASS_ROGUE) cls = CLASS_NONE; // 손상된 값 방어
+    state.playerClass = (ClassType)cls;
+    InitTalentsForClass(state);
+
+    int upLevels[UP_COUNT] = {};
+    for (int i = 0; i < UP_COUNT; i++) upLevels[i] = state.upgrades[i].level;
+    KVIntList(kv, "upgrades", upLevels, UP_COUNT);
+    for (int i = 0; i < UP_COUNT; i++) state.upgrades[i].level = upLevels[i];
+
+    int talLevels[TAL_COUNT] = {};
+    for (int i = 0; i < TAL_COUNT; i++) talLevels[i] = state.talents[i].level;
+    KVIntList(kv, "talents", talLevels, TAL_COUNT);
+    for (int i = 0; i < TAL_COUNT; i++) state.talents[i].level = talLevels[i];
+
+    auto invIt = kv.find("inventory");
+    if (invIt != kv.end())
+        DeserializeInventory(invIt->second, state.inventory);
 }

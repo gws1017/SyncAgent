@@ -1,4 +1,5 @@
 #include "tray.h"
+#include "lang.h"
 #include <shellapi.h>
 
 static NOTIFYICONDATAW g_nid = {};
@@ -39,9 +40,9 @@ void TrayShowContextMenu(HWND hwnd, UINT cmdStatus, UINT cmdQuit) {
     POINT pt;
     GetCursorPos(&pt);
     HMENU menu = CreatePopupMenu();
-    AppendMenuW(menu, MF_STRING,    cmdStatus, L"상태 대시보드");
+    AppendMenuW(menu, MF_STRING,    cmdStatus, TW(L"상태 대시보드", L"Status Dashboard"));
     AppendMenuW(menu, MF_SEPARATOR, 0,         nullptr);
-    AppendMenuW(menu, MF_STRING,    cmdQuit,   L"종료");
+    AppendMenuW(menu, MF_STRING,    cmdQuit,   TW(L"종료", L"Exit"));
     SetForegroundWindow(hwnd);
     TrackPopupMenu(menu, TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd, nullptr);
     DestroyMenu(menu);

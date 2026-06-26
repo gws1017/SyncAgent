@@ -1,16 +1,27 @@
 #pragma once
 #include <string>
 #include "equipment.h"
+#include "lang.h"
+
+// 이름/설명을 한/영 쌍으로 들고, 호출 시점에 T()로 고르는 접근자를 제공하는 표들
+// (전역 const 테이블은 프로그램 시작 시 한 번만 초기화되므로, 문자열을 거기서
+// 미리 골라두면 나중에 언어를 바꿔도 안 바뀜 — 그래서 멤버 함수로 매번 고름).
 
 // ---- 클래스 -----------------------------------------------------------------
 enum ClassType { CLASS_NONE = 0, CLASS_WARRIOR, CLASS_MAGE, CLASS_ROGUE };
 
 struct ClassDef {
-    const char* name;
-    const char* flavor;   // 한 줄 컨셉
-    const char* stat0;    // 특성 설명 줄 1
-    const char* stat1;    // 특성 설명 줄 2
-    const char* stat2;    // 특성 설명 줄 3
+    const char* nameKo;   const char* nameEn;
+    const char* flavorKo; const char* flavorEn;   // 한 줄 컨셉
+    const char* stat0Ko;  const char* stat0En;     // 특성 설명 줄 1
+    const char* stat1Ko;  const char* stat1En;     // 특성 설명 줄 2
+    const char* stat2Ko;  const char* stat2En;     // 특성 설명 줄 3
+
+    const char* Name()   const { return T(nameKo, nameEn); }
+    const char* Flavor() const { return T(flavorKo, flavorEn); }
+    const char* Stat0()  const { return T(stat0Ko, stat0En); }
+    const char* Stat1()  const { return T(stat1Ko, stat1En); }
+    const char* Stat2()  const { return T(stat2Ko, stat2En); }
 };
 
 // 인덱스 = ClassType - 1 (CLASS_NONE 제외)
@@ -20,12 +31,15 @@ extern const ClassDef kClasses[3];
 enum UpgradeId { UP_XP = 0, UP_GOLD, UP_DROP, UP_ATK, UP_COUNT };
 
 struct Upgrade {
-    const char* name       = "";
-    const char* desc       = "";
+    const char* nameKo = ""; const char* nameEn = "";
+    const char* descKo = ""; const char* descEn = "";
     int         level      = 0;
     int         maxLevel   = 10;
     long long   baseCost   = 0;
     float       multiplier = 0.0f;
+
+    const char* Name() const { return T(nameKo, nameEn); }
+    const char* Desc() const { return T(descKo, descEn); }
 };
 
 // ---- 특성 (레벨업 시 포인트 지급, 골드 아닌 포인트로 투자) --------------------
@@ -37,10 +51,13 @@ static constexpr int TIER2_TAL_COUNT = 3; // 슬롯 3~5
 static constexpr int TIER2_LEVEL_REQ = 25; // 2차 특성 해금 레벨
 
 struct Talent {
-    const char* name     = "";
-    const char* desc     = "";
+    const char* nameKo = ""; const char* nameEn = "";
+    const char* descKo = ""; const char* descEn = "";
     int         level    = 0;
     int         maxLevel = 10;
+
+    const char* Name() const { return T(nameKo, nameEn); }
+    const char* Desc() const { return T(descKo, descEn); }
 };
 
 // 인덱스 = ClassType - 1. 클래스 선택 시 InitTalentsForClass()로 채워짐.
@@ -87,7 +104,7 @@ struct GameState {
     int       level = 1;
     long long xp    = 0;
     long long gold  = 0;
-    std::wstring lastEvent = L"대기 중...";
+    std::wstring lastEvent = TW(L"대기 중...", L"Waiting...");
 
     Upgrade   upgrades[UP_COUNT];
     Talent    talents[TAL_COUNT];
@@ -102,6 +119,8 @@ struct GameState {
     // 위장 시간 기록 — 백그라운드로 켜놓은 누적 시간 / 대시보드를 열어본 누적 시간
     double totalRunSec      = 0.0;
     double dashboardOpenSec = 0.0;
+
+    int language = 0; // 0=한국어, 1=영어. g_lang(lang.h)과 동기화해서 저장/불러오기함
 
     Dungeon   dungeon;
     Inventory inventory;

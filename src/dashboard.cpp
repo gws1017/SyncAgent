@@ -1,5 +1,6 @@
 #include "dashboard.h"
 #include "equipment.h"
+#include "lang.h"
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx11.h"
@@ -84,7 +85,8 @@ static LRESULT CALLBACK DashWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 // ---- 클래스 선택 화면 -------------------------------------------------------
 static void ScreenClassSelect(GameState& state) {
     ImGui::Spacing();
-    ImGui::TextDisabled("직업을 선택하세요  (프레스티지 전까지는 변경 불가)");
+    ImGui::TextDisabled("%s", T("직업을 선택하세요  (프레스티지 전까지는 변경 불가)",
+                                 "Choose a class  (locked until you prestige)"));
     ImGui::Separator();
     ImGui::Spacing();
 
@@ -93,7 +95,7 @@ static void ScreenClassSelect(GameState& state) {
         ImGui::PushID(i);
 
         // 직업 이름 버튼
-        if (ImGui::Button(c.name, {80, 48})) {
+        if (ImGui::Button(c.Name(), {80, 48})) {
             state.playerClass = (ClassType)(i + 1);
             InitTalentsForClass(state);
             SaveGame(state);
@@ -102,10 +104,10 @@ static void ScreenClassSelect(GameState& state) {
 
         // 설명 블록
         ImGui::BeginGroup();
-        ImGui::TextDisabled("%s", c.flavor);
-        ImGui::BulletText("%s", c.stat0);
-        ImGui::BulletText("%s", c.stat1);
-        ImGui::BulletText("%s", c.stat2);
+        ImGui::TextDisabled("%s", c.Flavor());
+        ImGui::BulletText("%s", c.Stat0());
+        ImGui::BulletText("%s", c.Stat1());
+        ImGui::BulletText("%s", c.Stat2());
         ImGui::EndGroup();
 
         ImGui::Spacing();
@@ -133,7 +135,7 @@ static void TabStatus(GameState& state) {
 
     char evt[128] = {};
     ToUtf8(state.lastEvent, evt, sizeof(evt));
-    ImGui::TextDisabled("최근 이벤트");
+    ImGui::TextDisabled("%s", T("최근 이벤트", "Recent event"));
     ImGui::TextWrapped("%s", evt);
 
     ImGui::Spacing();
@@ -143,16 +145,33 @@ static void TabStatus(GameState& state) {
     char runBuf[32], dashBuf[32];
     FormatDuration(state.totalRunSec, runBuf, sizeof(runBuf));
     FormatDuration(state.dashboardOpenSec, dashBuf, sizeof(dashBuf));
-    ImGui::TextDisabled("위장 기록");
-    ImGui::Text("몰래 가동");    ImGui::SameLine(140); ImGui::Text("%s  (트레이에 숨어서 돈 시간)", runBuf);
-    ImGui::Text("대시보드 노출"); ImGui::SameLine(140); ImGui::Text("%s  (들킬 뻔한 시간)", dashBuf);
-    ImGui::Text("사망 횟수");    ImGui::SameLine(140); ImGui::Text("%lld 회  (이번 캐릭터 기준)", state.deathCount);
+    ImGui::TextDisabled("%s", T("위장 기록", "Stealth log"));
+    ImGui::Text("%s", T("몰래 가동", "Hidden uptime"));    ImGui::SameLine(140);
+    ImGui::Text(T("%s  (트레이에 숨어서 돈 시간)", "%s  (time spent hidden in tray)"), runBuf);
+    ImGui::Text("%s", T("대시보드 노출", "Dashboard open"));   ImGui::SameLine(140);
+    ImGui::Text(T("%s  (들킬 뻔한 시간)", "%s  (time you risked getting caught)"), dashBuf);
+    ImGui::Text("%s", T("사망 횟수", "Deaths"));   ImGui::SameLine(140);
+    ImGui::Text(T("%lld 회  (이번 캐릭터 기준)", "%lld  (this character)"), state.deathCount);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    ImGui::TextDisabled("%s", T("언어 / Language", "Language / 언어"));
+    int langIdx = (g_lang == Lang::KO) ? 0 : 1;
+    const char* langItems[] = { "한국어", "English" };
+    ImGui::SetNextItemWidth(160);
+    if (ImGui::Combo("##lang", &langIdx, langItems, 2)) {
+        g_lang = (langIdx == 0) ? Lang::KO : Lang::EN;
+        state.language = langIdx;
+        SaveGame(state);
+    }
 }
 
 static void TabUpgrade(GameState& state) {
     ImGui::Spacing();
 
-    ImGui::Text("골드");      ImGui::SameLine(100); ImGui::Text("%lld G", state.gold);
+    ImGui::Text("%s", T("골드", "Gold"));      ImGui::SameLine(100); ImGui::Text("%lld G", state.gold);
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
@@ -163,12 +182,12 @@ static void TabUpgrade(GameState& state) {
 
         // 이름 + 레벨
         char header[64];
-        snprintf(header, sizeof(header), "%s  [%d / %d]", u.name, u.level, u.maxLevel);
+        snprintf(header, sizeof(header), "%s  [%d / %d]", u.Name(), u.level, u.maxLevel);
         ImGui::Text("%s", header);
 
         // 설명
         ImGui::SameLine(260);
-        ImGui::TextDisabled("%s", u.desc);
+        ImGui::TextDisabled("%s", u.Desc());
 
         // 레벨 게이지
         ImGui::SetNextItemWidth(260);
@@ -196,32 +215,35 @@ static void TabUpgrade(GameState& state) {
     ImGui::Separator();
     ImGui::Spacing();
 
-    ImGui::TextDisabled("프레스티지  (%d회 진행)", state.prestigeCount);
-    ImGui::TextWrapped("회당 보너스: XP/골드/드랍률 +%.0f%%,  공격력 +%.0f%%,  최대체력 +%lld"
-                        "   (지금까지 %d회 × 위 수치 = 현재 적용 중인 총 보너스)",
+    ImGui::TextDisabled(T("프레스티지  (%d회 진행)", "Prestige  (%d done)"), state.prestigeCount);
+    ImGui::TextWrapped(T("회당 보너스: XP/골드/드랍률 +%.0f%%,  공격력 +%.0f%%,  최대체력 +%lld"
+                          "   (지금까지 %d회 × 위 수치 = 현재 적용 중인 총 보너스)",
+                          "Per run: +%.0f%% XP/gold/drop rate, +%.0f%% attack, +%lld max HP"
+                          "   (x%d runs so far = current total bonus)"),
                         PRESTIGE_ECON_BONUS * 100.0f, PRESTIGE_ATK_BONUS * 100.0f, PRESTIGE_HP_BONUS,
                         state.prestigeCount);
-    ImGui::TextDisabled("실행하면 레벨/골드/장비(보관함)/스테이지가 초기화되고 직업을 다시 고릅니다.");
+    ImGui::TextDisabled("%s", T("실행하면 레벨/골드/장비(보관함)/스테이지가 초기화되고 직업을 다시 고릅니다.",
+                                 "Resets level/gold/gear(bag)/stage and lets you pick a class again."));
     long long req = PrestigeRequirement(state.prestigeCount);
     bool canPrestige = state.dungeon.stage >= req;
     if (!canPrestige) ImGui::BeginDisabled();
-    if (ImGui::Button("프레스티지 실행", {320, 0})) {
+    if (ImGui::Button(T("프레스티지 실행", "Prestige Now"), {320, 0})) {
         DoPrestige(state);
         SaveGame(state);
     }
     if (!canPrestige) ImGui::EndDisabled();
     if (!canPrestige)
-        ImGui::TextDisabled("스테이지 %lld 이상 도달 시 해금", req);
+        ImGui::TextDisabled(T("스테이지 %lld 이상 도달 시 해금", "Unlocks at stage %lld"), req);
 
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
     static bool confirmReset = false;
-    ImGui::TextDisabled("세이브 초기화");
-    ImGui::Checkbox("정말로 초기화할게요 (되돌릴 수 없음)", &confirmReset);
+    ImGui::TextDisabled("%s", T("세이브 초기화", "Reset Save"));
+    ImGui::Checkbox(T("정말로 초기화할게요 (되돌릴 수 없음)", "Yes, really reset (cannot be undone)"), &confirmReset);
     if (!confirmReset) ImGui::BeginDisabled();
-    if (ImGui::Button("세이브 초기화 실행", {320, 0})) {
+    if (ImGui::Button(T("세이브 초기화 실행", "Reset Save Now"), {320, 0})) {
         ResetGame(state);
         SaveGame(state);
         confirmReset = false;
@@ -236,11 +258,11 @@ static void DrawTalentRows(GameState& state, int slotStart, int count, int& pool
         ImGui::PushID(i);
 
         char header[64];
-        snprintf(header, sizeof(header), "%s  [%d / %d]", t.name, t.level, t.maxLevel);
+        snprintf(header, sizeof(header), "%s  [%d / %d]", t.Name(), t.level, t.maxLevel);
         ImGui::Text("%s", header);
 
         ImGui::SameLine(260);
-        ImGui::TextDisabled("%s", t.desc);
+        ImGui::TextDisabled("%s", t.Desc());
 
         ImGui::SetNextItemWidth(260);
         ImGui::ProgressBar((float)t.level / t.maxLevel, {260, 6}, "");
@@ -249,7 +271,7 @@ static void DrawTalentRows(GameState& state, int slotStart, int count, int& pool
         bool maxed = (t.level >= t.maxLevel);
         bool canInvest = !maxed && pool > 0;
         if (!canInvest) ImGui::BeginDisabled();
-        if (ImGui::Button(maxed ? "MAX" : "+1 투자", {90, 0}))
+        if (ImGui::Button(maxed ? "MAX" : T("+1 투자", "+1 Invest"), {90, 0}))
             InvestTalent(state, i);
         if (!canInvest) ImGui::EndDisabled();
 
@@ -261,10 +283,11 @@ static void DrawTalentRows(GameState& state, int slotStart, int count, int& pool
 static void TabTalent(GameState& state) {
     ImGui::Spacing();
     int spent1 = state.talents[TAL_0].level + state.talents[TAL_1].level + state.talents[TAL_2].level;
-    ImGui::TextDisabled("1차 특성  —  레벨업마다 1포인트, 평생 최대 %d포인트 (3개 다 풀업은 불가능)",
+    ImGui::TextDisabled(T("1차 특성  —  레벨업마다 1포인트, 평생 최대 %d포인트 (3개 다 풀업은 불가능)",
+                           "Tier 1 talents  —  1 point/level-up, %d lifetime cap (can't max all 3)"),
                          MAX_TALENT_POINTS);
-    ImGui::Text("보유 포인트"); ImGui::SameLine(140); ImGui::Text("%d", state.talentPoints);
-    ImGui::Text("누적 (보유+투자)"); ImGui::SameLine(140); ImGui::Text("%d / %d", state.talentPoints + spent1, MAX_TALENT_POINTS);
+    ImGui::Text("%s", T("보유 포인트", "Points available")); ImGui::SameLine(140); ImGui::Text("%d", state.talentPoints);
+    ImGui::Text("%s", T("누적 (보유+투자)", "Total earned"));   ImGui::SameLine(140); ImGui::Text("%d / %d", state.talentPoints + spent1, MAX_TALENT_POINTS);
     ImGui::Separator();
     ImGui::Spacing();
 
@@ -275,13 +298,15 @@ static void TabTalent(GameState& state) {
     ImGui::Spacing();
 
     if (state.level < TIER2_LEVEL_REQ) {
-        ImGui::TextDisabled("2차 특성  —  레벨 %d부터 해금 (현재 Lv.%d)", TIER2_LEVEL_REQ, state.level);
+        ImGui::TextDisabled(T("2차 특성  —  레벨 %d부터 해금 (현재 Lv.%d)", "Tier 2 talents  —  unlocks at Lv.%d (currently Lv.%d)"),
+                             TIER2_LEVEL_REQ, state.level);
     } else {
         int spent2 = state.talents[TAL_3].level + state.talents[TAL_4].level + state.talents[TAL_5].level;
-        ImGui::TextDisabled("2차 특성  —  레벨업마다 1포인트, 평생 최대 %d포인트 (1차와 별도 풀)",
+        ImGui::TextDisabled(T("2차 특성  —  레벨업마다 1포인트, 평생 최대 %d포인트 (1차와 별도 풀)",
+                               "Tier 2 talents  —  1 point/level-up, %d lifetime cap (separate pool from tier 1)"),
                              MAX_TALENT_POINTS_T2);
-        ImGui::Text("보유 포인트"); ImGui::SameLine(140); ImGui::Text("%d", state.talentPoints2);
-        ImGui::Text("누적 (보유+투자)"); ImGui::SameLine(140); ImGui::Text("%d / %d", state.talentPoints2 + spent2, MAX_TALENT_POINTS_T2);
+        ImGui::Text("%s", T("보유 포인트", "Points available")); ImGui::SameLine(140); ImGui::Text("%d", state.talentPoints2);
+        ImGui::Text("%s", T("누적 (보유+투자)", "Total earned"));   ImGui::SameLine(140); ImGui::Text("%d / %d", state.talentPoints2 + spent2, MAX_TALENT_POINTS_T2);
         ImGui::Separator();
         ImGui::Spacing();
 
@@ -304,11 +329,11 @@ static void TabEquipment(GameState& state) {
     ImGui::Spacing();
 
     // ---- 장착 슬롯 ----------------------------------------------------------
-    ImGui::TextDisabled("장착 중  (%d / %d)", (int)inv.equipped.size(), Inventory::MAX_EQUIP);
+    ImGui::TextDisabled(T("장착 중  (%d / %d)", "Equipped  (%d / %d)"), (int)inv.equipped.size(), Inventory::MAX_EQUIP);
     ImGui::Separator();
 
     if (inv.equipped.empty()) {
-        ImGui::TextDisabled("  장착된 아이템 없음");
+        ImGui::TextDisabled("%s", T("  장착된 아이템 없음", "  No items equipped"));
     }
     for (int i = 0; i < (int)inv.equipped.size(); i++) {
         const Item& it = inv.equipped[i];
@@ -317,18 +342,18 @@ static void TabEquipment(GameState& state) {
         ImGui::SameLine();
         ImGui::Text("%s +%.0f%%", StatName(it.stat), it.bonus * 100.0f);
         ImGui::SameLine(300);
-        if (ImGui::SmallButton("해제")) Unequip(inv, i);
+        if (ImGui::SmallButton(T("해제", "Unequip"))) Unequip(inv, i);
         ImGui::PopID();
     }
 
     ImGui::Spacing();
 
     // ---- 보관함 -------------------------------------------------------------
-    ImGui::TextDisabled("보관함  (%d / %d)", (int)inv.items.size(), Inventory::MAX_ITEMS);
+    ImGui::TextDisabled(T("보관함  (%d / %d)", "Bag  (%d / %d)"), (int)inv.items.size(), Inventory::MAX_ITEMS);
     ImGui::Separator();
 
     if (inv.items.empty()) {
-        ImGui::TextDisabled("  아이템 없음");
+        ImGui::TextDisabled("%s", T("  아이템 없음", "  No items"));
     }
 
     // 등급별로 같은 등급 아이템 수 카운트 (합성 버튼 표시용)
@@ -344,7 +369,7 @@ static void TabEquipment(GameState& state) {
         ImGui::SameLine(300);
         bool canEquip = (int)inv.equipped.size() < Inventory::MAX_EQUIP;
         if (!canEquip) ImGui::BeginDisabled();
-        if (ImGui::SmallButton("장착")) TryEquip(inv, i);
+        if (ImGui::SmallButton(T("장착", "Equip"))) TryEquip(inv, i);
         if (!canEquip) ImGui::EndDisabled();
         ImGui::PopID();
     }
@@ -352,21 +377,21 @@ static void TabEquipment(GameState& state) {
     ImGui::Spacing();
 
     // ---- 합성 버튼 ----------------------------------------------------------
-    ImGui::TextDisabled("합성 (같은 등급 3개 → 상위 등급)");
+    ImGui::TextDisabled("%s", T("합성 (같은 등급 3개 → 상위 등급)", "Craft (3 of same grade -> 1 higher grade)"));
     ImGui::Separator();
 
-    struct CraftRule { Grade from; const char* label; int rate; };
+    struct CraftRule { Grade from; const char* labelKo; const char* labelEn; };
     const CraftRule rules[] = {
-        { Grade::Common, "일반 x3 → 희귀 (100%%)",              100 },
-        { Grade::Rare,   "희귀 x3 → 영웅 (70%%) / 실패시 희귀 1개",  70 },
-        { Grade::Epic,   "영웅 x3 → 전설 (40%%) / 실패시 영웅 1개",  40 },
+        { Grade::Common, "일반 x3 → 희귀 (100%%)",             "Common x3 -> Rare (100%%)" },
+        { Grade::Rare,   "희귀 x3 → 영웅 (70%%) / 실패시 희귀 1개", "Rare x3 -> Epic (70%%) / fail returns 1 Rare" },
+        { Grade::Epic,   "영웅 x3 → 전설 (40%%) / 실패시 영웅 1개", "Epic x3 -> Legendary (40%%) / fail returns 1 Epic" },
     };
 
     for (auto& rule : rules) {
         int cnt = gradeCnt[(int)rule.from];
         bool canCraft = cnt >= 3;
-        char label[64];
-        snprintf(label, sizeof(label), "%s  [보유: %d]", rule.label, cnt);
+        char label[96];
+        snprintf(label, sizeof(label), T("%s  [보유: %d]", "%s  [have: %d]"), T(rule.labelKo, rule.labelEn), cnt);
         if (!canCraft) ImGui::BeginDisabled();
         if (ImGui::Button(label, {380, 0})) {
             // 재료 3개 제거
@@ -392,9 +417,9 @@ static void TabDungeon(GameState& state) {
     // ---- 캐릭터 상태 (적 체력과 바로 비교되도록 같은 너비로 위에 배치) ----------
     char clsBuf[64];
     const char* clsName = (state.playerClass != CLASS_NONE)
-                          ? kClasses[(int)state.playerClass - 1].name : "?";
+                          ? kClasses[(int)state.playerClass - 1].Name() : "?";
     snprintf(clsBuf, sizeof(clsBuf), "Lv.%d  [%s]", state.level, clsName);
-    ImGui::Text("영웅");      ImGui::SameLine(100); ImGui::Text("%s", clsBuf);
+    ImGui::Text("%s", T("영웅", "Hero"));      ImGui::SameLine(100); ImGui::Text("%s", clsBuf);
 
     ImGui::Spacing();
     ImGui::Text("XP");        ImGui::SameLine(100);
@@ -403,7 +428,7 @@ static void TabDungeon(GameState& state) {
     ImGui::ProgressBar(state.xpProgress(), {320, 0}, xpOverlay);
 
     ImGui::Spacing();
-    ImGui::Text("내 체력");    ImGui::SameLine(100);
+    ImGui::Text("%s", T("내 체력", "My HP"));    ImGui::SameLine(100);
     char playerHpOverlay[32];
     snprintf(playerHpOverlay, sizeof(playerHpOverlay), "%lld / %lld", state.playerHp, state.playerMaxHp);
     float playerHpFrac = (state.playerMaxHp > 0) ? (float)state.playerHp / (float)state.playerMaxHp : 0.0f;
@@ -417,11 +442,11 @@ static void TabDungeon(GameState& state) {
 
     char stageBuf[32];
     snprintf(stageBuf, sizeof(stageBuf),
-             d.bossStage ? "스테이지 %d  [BOSS]" : "스테이지 %d", d.stage);
+             d.bossStage ? T("스테이지 %d  [BOSS]", "Stage %d  [BOSS]") : T("스테이지 %d", "Stage %d"), d.stage);
     ImGui::Text("%s", stageBuf);
 
     ImGui::Spacing();
-    ImGui::Text("적 체력");    ImGui::SameLine(100);
+    ImGui::Text("%s", T("적 체력", "Enemy HP"));    ImGui::SameLine(100);
 
     float hpPct = (d.enemyMaxHp > 0)
                   ? (float)d.enemyHp / (float)d.enemyMaxHp
@@ -457,21 +482,24 @@ static void TabDungeon(GameState& state) {
     long long dmgToPlayer = MitigateDamage(enemyAtk, playerDef);
     dmgToPlayer = (long long)(dmgToPlayer * (1.0f - (std::min)(0.9f, tal.evasionBonus)));
 
-    ImGui::Text("적 방어력"); ImGui::SameLine(100); ImGui::Text("%lld", enemyDef);
-    ImGui::Text("적 공격력"); ImGui::SameLine(100); ImGui::Text("%lld", enemyAtk);
-    ImGui::Text("내 방어력"); ImGui::SameLine(100); ImGui::Text("%lld", playerDef);
+    ImGui::Text("%s", T("적 방어력", "Enemy DEF")); ImGui::SameLine(100); ImGui::Text("%lld", enemyDef);
+    ImGui::Text("%s", T("적 공격력", "Enemy ATK")); ImGui::SameLine(100); ImGui::Text("%lld", enemyAtk);
+    ImGui::Text("%s", T("내 방어력", "My DEF")); ImGui::SameLine(100); ImGui::Text("%lld", playerDef);
     if (atkSpeedBonus > 0.0f) {
-        ImGui::Text("공격속도"); ImGui::SameLine(100); ImGui::Text("평균 %.2f회 / 틱", expectedAttacks);
+        ImGui::Text("%s", T("공격속도", "Atk Speed")); ImGui::SameLine(100);
+        ImGui::Text(T("평균 %.2f회 / 틱", "avg %.2f hits / tick"), expectedAttacks);
     }
     if (lifestealPct > 0.0f) {
-        ImGui::Text("체력흡수"); ImGui::SameLine(100); ImGui::Text("%.0f%%", lifestealPct * 100.0f);
+        ImGui::Text("%s", T("체력흡수", "Lifesteal")); ImGui::SameLine(100); ImGui::Text("%.0f%%", lifestealPct * 100.0f);
         if (state.lastHealAmount > 0)
-            ImGui::TextColored({0.4f, 0.9f, 0.5f, 1.0f}, "  ↳ 방금 +%lld 회복", state.lastHealAmount);
+            ImGui::TextColored({0.4f, 0.9f, 0.5f, 1.0f}, T("  ↳ 방금 +%lld 회복", "  -> just healed +%lld"), state.lastHealAmount);
     }
     if (dmgToPlayer > 0) {
-        ImGui::TextColored({1.0f, 0.4f, 0.3f, 1.0f}, "받는 피해 %lld / 틱 — 체력 0이 되면 전투가 리셋됩니다.", dmgToPlayer);
+        ImGui::TextColored({1.0f, 0.4f, 0.3f, 1.0f},
+            T("받는 피해 %lld / 틱 — 체력 0이 되면 전투가 리셋됩니다.", "Taking %lld dmg / tick — fight resets if HP hits 0."),
+            dmgToPlayer);
     } else {
-        ImGui::TextDisabled("받는 피해 %lld / 틱 (방어력으로 대부분 상쇄)", dmgToPlayer);
+        ImGui::TextDisabled(T("받는 피해 %lld / 틱 (방어력으로 대부분 상쇄)", "Taking %lld dmg / tick (mostly absorbed by defense)"), dmgToPlayer);
     }
 
     ImGui::Spacing();
@@ -480,26 +508,27 @@ static void TabDungeon(GameState& state) {
     case CLASS_WARRIOR:
         rawHit = (long long)(baseAtk * 1.5f) * (d.bossStage ? 2 : 1);
         if (d.bossStage) rawHit = (long long)(rawHit * (1.0f + tal.bossDmgBonus));
-        ImGui::Text("공격력");  ImGui::SameLine(100);
-        ImGui::Text("%lld / 타", rawHit);
+        ImGui::Text("%s", T("공격력", "Attack"));  ImGui::SameLine(100);
+        ImGui::Text(T("%lld / 타", "%lld / hit"), rawHit);
         break;
     case CLASS_MAGE: {
         float critChance = (std::min)(100.0f, 20.0f + tal.critChanceBonus);
         rawHit  = (long long)(baseAtk * 0.7f);
         critHit = (long long)(baseAtk * (4.0f + tal.critDmgBonus));
-        ImGui::Text("공격력");  ImGui::SameLine(100);
-        ImGui::Text("%lld 일반  /  %lld 폭발 (%.0f%%)  (1타 기준)", rawHit, critHit, critChance);
+        ImGui::Text("%s", T("공격력", "Attack"));  ImGui::SameLine(100);
+        ImGui::Text(T("%lld 일반  /  %lld 폭발 (%.0f%%)  (1타 기준)", "%lld normal  /  %lld burst (%.0f%%)  (per hit)"),
+                    rawHit, critHit, critChance);
         break;
     }
     case CLASS_ROGUE:
         rawHit = baseAtk * 2;
-        ImGui::Text("공격력");  ImGui::SameLine(100);
-        ImGui::Text("%lld x2 / 타", baseAtk);
+        ImGui::Text("%s", T("공격력", "Attack"));  ImGui::SameLine(100);
+        ImGui::Text(T("%lld x2 / 타", "%lld x2 / hit"), baseAtk);
         break;
     default:
         rawHit = baseAtk;
-        ImGui::Text("공격력");  ImGui::SameLine(100);
-        ImGui::Text("%lld / 타", baseAtk);
+        ImGui::Text("%s", T("공격력", "Attack"));  ImGui::SameLine(100);
+        ImGui::Text(T("%lld / 타", "%lld / hit"), baseAtk);
         break;
     }
 
@@ -508,10 +537,11 @@ static void TabDungeon(GameState& state) {
     long long effDmg = (std::max)(0LL, perTickRaw - enemyDef);
     ImGui::Spacing();
     if (effDmg <= 0) {
-        ImGui::TextColored({1.0f, 0.4f, 0.3f, 1.0f},
-            "실데미지 0 — 적 방어력을 못 넘어 진행 불가. 업그레이드/장비로 공격력을 올리세요.");
+        ImGui::TextColored({1.0f, 0.4f, 0.3f, 1.0f}, "%s",
+            T("실데미지 0 — 적 방어력을 못 넘어 진행 불가. 업그레이드/장비로 공격력을 올리세요.",
+              "0 effective damage — can't break enemy DEF. Boost attack via upgrades/gear."));
     } else {
-        ImGui::TextDisabled("실데미지(방어 적용 후, 틱당 기대치)  %lld / 틱", effDmg);
+        ImGui::TextDisabled(T("실데미지(방어 적용 후, 틱당 기대치)  %lld / 틱", "Effective dmg (after DEF, per tick)  %lld / tick"), effDmg);
     }
 }
 
@@ -611,11 +641,11 @@ void DashboardFrame(GameState& state) {
     if (state.playerClass == CLASS_NONE) {
         ScreenClassSelect(state);
     } else if (ImGui::BeginTabBar("##tabs")) {
-        if (ImGui::BeginTabItem("현황"))       { TabScrollable("##s1", TabStatus,    state); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("업그레이드"))  { TabScrollable("##s2", TabUpgrade,   state); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("특성"))       { TabScrollable("##s3", TabTalent,    state); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("던전"))       { TabScrollable("##s4", TabDungeon,   state); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("장비"))       { TabScrollable("##s5", TabEquipment, state); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(T("현황", "Status")))    { TabScrollable("##s1", TabStatus,    state); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(T("업그레이드", "Upgrade"))) { TabScrollable("##s2", TabUpgrade,   state); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(T("특성", "Talents")))   { TabScrollable("##s3", TabTalent,    state); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(T("던전", "Dungeon")))   { TabScrollable("##s4", TabDungeon,   state); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(T("장비", "Gear")))      { TabScrollable("##s5", TabEquipment, state); ImGui::EndTabItem(); }
         ImGui::EndTabBar();
     }
 

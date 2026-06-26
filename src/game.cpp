@@ -1,6 +1,7 @@
 #include "game.h"
 #include "equipment.h"
 #include "platform.h"
+#include "lang.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
@@ -15,34 +16,34 @@ static std::mt19937 g_rng{ std::random_device{}() };
 // ---- 클래스 정의 ------------------------------------------------------------
 const ClassDef kClasses[3] = {
     {
-        "전사",
-        "단단하고 안정적인 근접 전투",
-        "공격력 x1.5",
-        "보스 데미지 x2.0",
-        "골드 획득 x1.2",
+        "전사", "Warrior",
+        "단단하고 안정적인 근접 전투", "Sturdy, reliable melee combat",
+        "공격력 x1.5", "Attack x1.5",
+        "보스 데미지 x2.0", "Boss damage x2.0",
+        "골드 획득 x1.2", "Gold gain x1.2",
     },
     {
-        "마법사",
-        "강력하지만 불안정한 원거리 마법",
-        "기본 공격 x0.7",
-        "20% 확률로 x4.0 폭발 데미지",
-        "XP 획득 x1.5",
+        "마법사", "Mage",
+        "강력하지만 불안정한 원거리 마법", "Powerful but unstable ranged magic",
+        "기본 공격 x0.7", "Base attack x0.7",
+        "20% 확률로 x4.0 폭발 데미지", "20% chance of x4.0 burst damage",
+        "XP 획득 x1.5", "XP gain x1.5",
     },
     {
-        "도적",
-        "빠르고 날쌘 근접 약탈",
-        "매 틱 2회 공격",
-        "아이템 드랍률 x2.0",
-        "골드 획득 x1.3",
+        "도적", "Rogue",
+        "빠르고 날쌘 근접 약탈", "Fast, nimble melee plunder",
+        "매 틱 2회 공격", "Attacks twice per tick",
+        "아이템 드랍률 x2.0", "Item drop rate x2.0",
+        "골드 획득 x1.3", "Gold gain x1.3",
     },
 };
 
 // ---- 업그레이드 초기화 -------------------------------------------------------
 static void InitUpgrades(GameState& state) {
-    state.upgrades[UP_XP]   = { "수련 강도", "XP 획득량 +20% / 레벨",  0, 10,  50, 0.20f };
-    state.upgrades[UP_GOLD] = { "채집 효율", "골드 획득량 +20% / 레벨", 0, 10,  80, 0.20f };
-    state.upgrades[UP_DROP] = { "탐색 본능", "드랍률 +10% / 레벨",      0, 10, 120, 0.10f };
-    state.upgrades[UP_ATK]  = { "전투 본능", "공격력 +15% / 레벨",      0, 10, 100, 0.15f };
+    state.upgrades[UP_XP]   = { "수련 강도", "Training",  "XP 획득량 +20% / 레벨",  "+20% XP gain / level",   0, 10,  50, 0.20f };
+    state.upgrades[UP_GOLD] = { "채집 효율", "Gathering", "골드 획득량 +20% / 레벨", "+20% gold gain / level", 0, 10,  80, 0.20f };
+    state.upgrades[UP_DROP] = { "탐색 본능", "Scavenging","드랍률 +10% / 레벨",      "+10% drop rate / level", 0, 10, 120, 0.10f };
+    state.upgrades[UP_ATK]  = { "전투 본능", "Combat",    "공격력 +15% / 레벨",      "+15% attack / level",    0, 10, 100, 0.15f };
 }
 
 // ---- 특성 -------------------------------------------------------------------
@@ -51,28 +52,28 @@ static void InitUpgrades(GameState& state) {
 // 클래스 컨셉에 맞춰 슬롯별 효과가 다름 (전사=탱커, 마법사=폭딜+자가회복, 도적=회피+다회타).
 const Talent kTalentDefs[3][TAL_COUNT] = {
     { // 전사 — 단단한 근접 탱커
-        { "철벽 방어 (패시브)",   "방어력 +10% / 포인트", 0, 10 },
-        { "전장의 분노 (패시브)", "공격력 +8% / 포인트",  0, 10 },
-        { "처단자 (패시브)",      "보스 데미지 +15% / 포인트", 0, 10 },
-        { "불굴의 의지 (패시브)", "최대체력 +5% / 포인트", 0, 10 },
-        { "광전사 (패시브)",      "공격력 +6% / 포인트",   0, 10 },
-        { "수호자 (패시브)",      "방어력 +8% / 포인트",   0, 10 },
+        { "철벽 방어 (패시브)",   "Iron Wall (Passive)",     "방어력 +10% / 포인트",      "+10% defense / point",      0, 10 },
+        { "전장의 분노 (패시브)", "Battle Rage (Passive)",   "공격력 +8% / 포인트",       "+8% attack / point",        0, 10 },
+        { "처단자 (패시브)",      "Executioner (Passive)",   "보스 데미지 +15% / 포인트", "+15% boss damage / point",  0, 10 },
+        { "불굴의 의지 (패시브)", "Unbreakable (Passive)",   "최대체력 +5% / 포인트",     "+5% max HP / point",        0, 10 },
+        { "광전사 (패시브)",      "Berserker (Passive)",     "공격력 +6% / 포인트",       "+6% attack / point",        0, 10 },
+        { "수호자 (패시브)",      "Guardian (Passive)",      "방어력 +8% / 포인트",       "+8% defense / point",       0, 10 },
     },
     { // 마법사 — 불안정한 폭딜, 자가 회복으로 보완
-        { "마나 증폭 (패시브)",   "폭발 데미지 +15% / 포인트",   0, 10 },
-        { "마력 폭주 (패시브)",   "폭발 확률 +2%p / 포인트",     0, 10 },
-        { "마나 흡혈 (패시브)",   "체력흡수 +3% / 포인트",       0, 10 },
-        { "마나 코어 (패시브)",   "최대체력 +5% / 포인트",       0, 10 },
-        { "원소 폭발 (패시브)",   "폭발 데미지 +10% / 포인트",   0, 10 },
-        { "흡혼 (패시브)",        "체력흡수 +2% / 포인트",       0, 10 },
+        { "마나 증폭 (패시브)",   "Mana Amplify (Passive)",  "폭발 데미지 +15% / 포인트",   "+15% burst damage / point",   0, 10 },
+        { "마력 폭주 (패시브)",   "Mana Surge (Passive)",    "폭발 확률 +2%p / 포인트",     "+2%p burst chance / point",   0, 10 },
+        { "마나 흡혈 (패시브)",   "Mana Drain (Passive)",    "체력흡수 +3% / 포인트",       "+3% lifesteal / point",       0, 10 },
+        { "마나 코어 (패시브)",   "Mana Core (Passive)",     "최대체력 +5% / 포인트",       "+5% max HP / point",          0, 10 },
+        { "원소 폭발 (패시브)",   "Elemental Burst (Passive)","폭발 데미지 +10% / 포인트",  "+10% burst damage / point",   0, 10 },
+        { "흡혼 (패시브)",        "Soul Drain (Passive)",    "체력흡수 +2% / 포인트",       "+2% lifesteal / point",       0, 10 },
     },
     { // 도적 — 빠르고 잘 피하는 다회타
-        { "연속 공격 (패시브)",   "공격속도 +10% / 포인트",      0, 10 },
-        { "기습 (확률)",          "추가 공격 확률 +4%p / 포인트", 0, 10 },
-        { "은신 회피 (패시브)",   "받는 피해 -5% / 포인트",       0, 10 },
-        { "쾌속 (패시브)",        "공격속도 +6% / 포인트",        0, 10 },
-        { "치명적 기습 (확률)",   "추가 공격 확률 +3%p / 포인트", 0, 10 },
-        { "야성 (패시브)",        "받는 피해 -4% / 포인트",       0, 10 },
+        { "연속 공격 (패시브)",   "Rapid Strikes (Passive)", "공격속도 +10% / 포인트",       "+10% attack speed / point",      0, 10 },
+        { "기습 (확률)",          "Ambush (Chance)",         "추가 공격 확률 +4%p / 포인트", "+4%p extra attack chance / point", 0, 10 },
+        { "은신 회피 (패시브)",   "Stealth Evasion (Passive)","받는 피해 -5% / 포인트",      "-5% damage taken / point",       0, 10 },
+        { "쾌속 (패시브)",        "Swiftness (Passive)",     "공격속도 +6% / 포인트",        "+6% attack speed / point",       0, 10 },
+        { "치명적 기습 (확률)",   "Deadly Ambush (Chance)",  "추가 공격 확률 +3%p / 포인트", "+3%p extra attack chance / point", 0, 10 },
+        { "야성 (패시브)",        "Wild Instinct (Passive)", "받는 피해 -4% / 포인트",       "-4% damage taken / point",       0, 10 },
     },
 };
 
@@ -240,7 +241,7 @@ void DoPrestige(GameState& state) {
     state.prestigeCount        = pc;
     state.totalRunSec          = runSec;
     state.dashboardOpenSec     = dashSec;
-    state.lastEvent            = L"[sync] 프레스티지 완료 — 직업을 다시 선택하세요";
+    state.lastEvent            = TW(L"[sync] 프레스티지 완료 — 직업을 다시 선택하세요", L"[sync] Prestige complete — choose a class again");
 }
 
 void ResetGame(GameState& state) {
@@ -250,7 +251,7 @@ void ResetGame(GameState& state) {
     InitUpgrades(state);
     state.totalRunSec      = runSec;  // 위장 시간 기록은 세이브 초기화에도 유지
     state.dashboardOpenSec = dashSec;
-    state.lastEvent        = L"[sync] 초기화 완료";
+    state.lastEvent        = TW(L"[sync] 초기화 완료", L"[sync] Reset complete");
 }
 
 std::wstring GameTick(GameState& state) {
@@ -364,9 +365,9 @@ std::wstring GameTick(GameState& state) {
 
         wchar_t buf[128];
         if (state.dungeon.bossStage)
-            swprintf(buf, 128, L"[sync] 보스 처치! 스테이지 %d 클리어 (+%lld G)", state.dungeon.stage, reward);
+            swprintf(buf, 128, TW(L"[sync] 보스 처치! 스테이지 %d 클리어 (+%lld G)", L"[sync] Boss defeated! Stage %d cleared (+%lld G)"), state.dungeon.stage, reward);
         else
-            swprintf(buf, 128, L"[sync] 스테이지 %d 클리어 (+%lld G)", state.dungeon.stage, reward);
+            swprintf(buf, 128, TW(L"[sync] 스테이지 %d 클리어 (+%lld G)", L"[sync] Stage %d cleared (+%lld G)"), state.dungeon.stage, reward);
         state.lastEvent = buf;
         if (state.dungeon.bossStage) notify = buf; // 보스만 알림, 일반 클리어는 조용히
 
@@ -385,7 +386,8 @@ std::wstring GameTick(GameState& state) {
         state.playerHp = state.playerMaxHp;
         state.dungeon.enemyHp = state.dungeon.enemyMaxHp;
         state.deathCount++;
-        state.lastEvent = L"[sync] 패배 — 전투 초기화. 방어력/체력흡수를 보강하세요.";
+        state.lastEvent = TW(L"[sync] 패배 — 전투 초기화. 방어력/체력흡수를 보강하세요.",
+                              L"[sync] Defeated — fight reset. Boost your defense/lifesteal.");
         // 막혀서 매 틱 죽는 상황에선 알림이 도배되므로 토스트는 띄우지 않음
     }
 
@@ -411,13 +413,13 @@ std::wstring GameTick(GameState& state) {
 
         wchar_t buf[64];
         if (gotTier1 && gotTier2)
-            swprintf(buf, 64, L"[sync] 레벨 %d 달성 (특성 포인트 +1, 2차 +1)", state.level);
+            swprintf(buf, 64, TW(L"[sync] 레벨 %d 달성 (특성 포인트 +1, 2차 +1)", L"[sync] Level %d reached (+1 talent pt, +1 tier-2)"), state.level);
         else if (gotTier1)
-            swprintf(buf, 64, L"[sync] 레벨 %d 달성 (특성 포인트 +1)", state.level);
+            swprintf(buf, 64, TW(L"[sync] 레벨 %d 달성 (특성 포인트 +1)", L"[sync] Level %d reached (+1 talent point)"), state.level);
         else if (gotTier2)
-            swprintf(buf, 64, L"[sync] 레벨 %d 달성 (2차 특성 포인트 +1)", state.level);
+            swprintf(buf, 64, TW(L"[sync] 레벨 %d 달성 (2차 특성 포인트 +1)", L"[sync] Level %d reached (+1 tier-2 point)"), state.level);
         else
-            swprintf(buf, 64, L"[sync] 레벨 %d 달성", state.level);
+            swprintf(buf, 64, TW(L"[sync] 레벨 %d 달성", L"[sync] Level %d reached"), state.level);
         state.lastEvent = buf;
     }
 
@@ -429,7 +431,7 @@ std::wstring GameTick(GameState& state) {
         wchar_t buf[80];
         if ((int)state.inventory.items.size() < Inventory::MAX_ITEMS) {
             state.inventory.items.push_back(dropped);
-            swprintf(buf, 80, L"[sync] %s 아이템 획득 (%s +%.0f%%)",
+            swprintf(buf, 80, TW(L"[sync] %s 아이템 획득 (%s +%.0f%%)", L"[sync] Got %s item (%s +%.0f%%)"),
                      GradeNameW(dropped.grade),
                      StatNameW(dropped.stat),
                      dropped.bonus * 100.0f);
@@ -437,7 +439,7 @@ std::wstring GameTick(GameState& state) {
             if (notify.empty() && dropped.grade >= Grade::Rare) notify = buf;
         } else {
             // 보관함이 가득 차서 드랍이 그대로 버려짐 — 놓치고 있다는 걸 알려줘야 함
-            swprintf(buf, 80, L"[sync] 보관함 가득 참 — %s 아이템을 놓쳤습니다!", GradeNameW(dropped.grade));
+            swprintf(buf, 80, TW(L"[sync] 보관함 가득 참 — %s 아이템을 놓쳤습니다!", L"[sync] Bag full — missed a %s item!"), GradeNameW(dropped.grade));
             state.lastEvent = buf;
             if (notify.empty()) notify = buf;
         }
@@ -483,6 +485,7 @@ void SaveGame(const GameState& state) {
     WriteKV(f, "totalRunSec", state.totalRunSec);
     WriteKV(f, "dashboardOpenSec", state.dashboardOpenSec);
     WriteKV(f, "deathCount", state.deathCount);
+    WriteKV(f, "language", (long long)(int)g_lang);
 
     int upLevels[UP_COUNT];
     for (int i = 0; i < UP_COUNT; i++) upLevels[i] = state.upgrades[i].level;
@@ -547,6 +550,8 @@ void LoadGame(GameState& state) {
     state.totalRunSec      = KVDouble(kv, "totalRunSec", 0.0);
     state.dashboardOpenSec = KVDouble(kv, "dashboardOpenSec", 0.0);
     state.deathCount        = KVLL(kv, "deathCount", 0);
+    state.language = (int)KVLL(kv, "language", 0);
+    g_lang = (state.language == 1) ? Lang::EN : Lang::KO;
 
     long long cls = KVLL(kv, "class", CLASS_NONE);
     if (cls < CLASS_NONE || cls > CLASS_ROGUE) cls = CLASS_NONE; // 손상된 값 방어

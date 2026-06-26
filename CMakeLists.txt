@@ -13,6 +13,7 @@ add_executable(syncagent WIN32
     src/tray.cpp
     src/dashboard.cpp
     src/platform_win.cpp
+    src/lang.cpp
     src/app.rc
     ${IMGUI_DIR}/imgui.cpp
     ${IMGUI_DIR}/imgui_draw.cpp

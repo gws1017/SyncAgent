@@ -1,4 +1,5 @@
 #include "equipment.h"
+#include "lang.h"
 #include <random>
 #include <sstream>
 #include <algorithm>
@@ -8,23 +9,23 @@ static std::mt19937 g_rng{ std::random_device{}() };
 // ---- 등급/스탯 이름 ---------------------------------------------------------
 const char* GradeName(Grade g) {
     switch (g) {
-    case Grade::Common:    return "일반";
-    case Grade::Rare:      return "희귀";
-    case Grade::Epic:      return "영웅";
-    case Grade::Legendary: return "전설";
+    case Grade::Common:    return T("일반", "Common");
+    case Grade::Rare:      return T("희귀", "Rare");
+    case Grade::Epic:      return T("영웅", "Epic");
+    case Grade::Legendary: return T("전설", "Legendary");
     }
     return "?";
 }
 
 const char* StatName(StatType s) {
     switch (s) {
-    case StatType::Attack:    return "공격력";
-    case StatType::Xp:        return "XP";
-    case StatType::Gold:      return "골드";
-    case StatType::Drop:      return "드랍률";
-    case StatType::Defense:   return "방어력";
-    case StatType::Lifesteal: return "체력흡수";
-    case StatType::AtkSpeed:  return "공격속도";
+    case StatType::Attack:    return T("공격력", "Attack");
+    case StatType::Xp:        return T("XP", "XP");
+    case StatType::Gold:      return T("골드", "Gold");
+    case StatType::Drop:      return T("드랍률", "Drop Rate");
+    case StatType::Defense:   return T("방어력", "Defense");
+    case StatType::Lifesteal: return T("체력흡수", "Lifesteal");
+    case StatType::AtkSpeed:  return T("공격속도", "Atk Speed");
     default: break;
     }
     return "?";
@@ -32,23 +33,23 @@ const char* StatName(StatType s) {
 
 const wchar_t* GradeNameW(Grade g) {
     switch (g) {
-    case Grade::Common:    return L"일반";
-    case Grade::Rare:      return L"희귀";
-    case Grade::Epic:      return L"영웅";
-    case Grade::Legendary: return L"전설";
+    case Grade::Common:    return TW(L"일반", L"Common");
+    case Grade::Rare:      return TW(L"희귀", L"Rare");
+    case Grade::Epic:      return TW(L"영웅", L"Epic");
+    case Grade::Legendary: return TW(L"전설", L"Legendary");
     }
     return L"?";
 }
 
 const wchar_t* StatNameW(StatType s) {
     switch (s) {
-    case StatType::Attack:    return L"공격력";
-    case StatType::Xp:        return L"XP";
-    case StatType::Gold:      return L"골드";
-    case StatType::Drop:      return L"드랍률";
-    case StatType::Defense:   return L"방어력";
-    case StatType::Lifesteal: return L"체력흡수";
-    case StatType::AtkSpeed:  return L"공격속도";
+    case StatType::Attack:    return TW(L"공격력", L"Attack");
+    case StatType::Xp:        return TW(L"XP", L"XP");
+    case StatType::Gold:      return TW(L"골드", L"Gold");
+    case StatType::Drop:      return TW(L"드랍률", L"Drop Rate");
+    case StatType::Defense:   return TW(L"방어력", L"Defense");
+    case StatType::Lifesteal: return TW(L"체력흡수", L"Lifesteal");
+    case StatType::AtkSpeed:  return TW(L"공격속도", L"Atk Speed");
     default: break;
     }
     return L"?";

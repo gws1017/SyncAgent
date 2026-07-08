@@ -14,8 +14,12 @@ static GameState g_state;
 
 static void UpdateTrayTooltip() {
     wchar_t tip[128];
-    swprintf_s(tip, L"sync agent  •  Lv.%d  •  %lld G",
-               g_state.level, g_state.gold);
+    if (g_state.activeHero >= 0) {
+        const Hero& h = g_state.Active();
+        swprintf_s(tip, L"sync agent  •  Lv.%d  •  %lld G", h.level, h.gold);
+    } else {
+        swprintf_s(tip, L"sync agent");
+    }
     TraySetTooltip(tip);
 }
 
@@ -63,6 +67,14 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
+    // 중복 실행 방지 — 이미 떠 있는 인스턴스가 있으면 그냥 조용히 종료.
+    // (안 그러면 옛 인스턴스와 새 인스턴스가 같은 세이브 파일을 5초마다 번갈아
+    // 덮어써서 진행 상황이 무작위로 섞이거나 사라지는 사고가 난다.)
+    HANDLE hMutex = CreateMutexW(nullptr, TRUE, L"SyncAgentSingleInstanceMutex");
+    if (!hMutex || GetLastError() == ERROR_ALREADY_EXISTS) {
+        return 0;
+    }
+
     LoadGame(g_state);
 
     const wchar_t* cls = L"SyncAgentMsg";

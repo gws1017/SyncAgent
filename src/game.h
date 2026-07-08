@@ -90,16 +90,15 @@ struct Dungeon {
     bool      bossStage  = false;
 };
 
-static constexpr int   PRESTIGE_STAGE_REQ  = 20;    // 프레스티지 해금 조건
-static constexpr float PRESTIGE_ECON_BONUS = 0.15f; // 회당 XP/골드/드랍률 보너스
-static constexpr float PRESTIGE_ATK_BONUS  = 0.10f; // 회당 공격력 보너스
-static constexpr long long PRESTIGE_HP_BONUS = 20;  // 회당 최대체력 보너스
+static constexpr int   PRESTIGE_STAGE_REQ  = 40;    // 프레스티지(영웅 계승) 해금 스테이지
 
 long long XpForLevel(int level); // 지수 증가 — 레벨업이 점점 크게 느려짐
 
-struct GameState {
-    ClassType playerClass  = CLASS_NONE;
-    int       prestigeCount = 0;
+// ---- 영웅 한 명의 진행 상황 (로스터 슬롯 하나) -------------------------------
+// 슬롯 인덱스 = ClassType - 1. 영웅마다 완전히 독립적으로 성장/장비/특성을 가짐.
+struct Hero {
+    ClassType playerClass  = CLASS_NONE; // 이 슬롯이 비어있으면 CLASS_NONE
+    bool      everPlayed   = false;      // 한 번이라도 만들어진 적 있는지 (로스터 표시용)
 
     int       level = 1;
     long long xp    = 0;
@@ -114,7 +113,28 @@ struct GameState {
     long long playerHp       = 200;
     long long playerMaxHp    = 200;
     long long lastHealAmount = 0; // 이번 틱 체력흡수 회복량 (표시용, 저장 안 함)
-    long long deathCount     = 0; // 전투 중 체력 0이 되어 초기화된 횟수 (이번 캐릭터 기준)
+    long long deathCount     = 0; // 전투 중 체력 0이 되어 초기화된 횟수 (이 영웅 기준)
+
+    int prestigeCount = 0; // 이 영웅이 계승(프레스티지)한 횟수
+
+    Dungeon   dungeon;
+    Inventory inventory;
+
+    long long xpForNext()  const { return XpForLevel(level); }
+    float     xpProgress() const { return (float)xp / (float)xpForNext(); }
+};
+
+// ---- 계정 전체 상태 — 영웅 로스터(최대 3, 클래스당 1) + 계승 보너스 풀 ----------
+struct GameState {
+    static constexpr int ROSTER_SIZE = 3;
+    Hero heroes[ROSTER_SIZE];
+    int  activeHero = -1; // -1 = 아직 영웅을 안 만듦 (로스터 화면 표시)
+
+    // 계승 보너스 — 어떤 영웅이든 프레스티지할 때마다 그 영웅의 투자량에 비례해서
+    // 증가하며, 모든 영웅(기존+신규)에게 항상 적용됨. "다른 영웅을 키워도 이전에
+    // 쌓아둔 게 도움이 된다"는 느낌을 주는 계정 전체 공용 자원.
+    float legacyBonusPct      = 0.0f; // 전체 보너스 (%, 공격력/방어력/XP/골드/드랍률/체력에 적용)
+    int   legacyPrestigeCount = 0;    // 전체 영웅 합산 프레스티지 횟수 (표시용)
 
     // 위장 시간 기록 — 백그라운드로 켜놓은 누적 시간 / 대시보드를 열어본 누적 시간
     double totalRunSec      = 0.0;
@@ -122,11 +142,8 @@ struct GameState {
 
     int language = 0; // 0=한국어, 1=영어. g_lang(lang.h)과 동기화해서 저장/불러오기함
 
-    Dungeon   dungeon;
-    Inventory inventory;
-
-    long long xpForNext()  const { return XpForLevel(level); }
-    float     xpProgress() const { return (float)xp / (float)xpForNext(); }
+    Hero&       Active()       { return heroes[activeHero]; }
+    const Hero& Active() const { return heroes[activeHero]; }
 };
 
 long long    EnemyDefForStage(int stage);
@@ -136,18 +153,24 @@ long long    EnemyAtkForStage(int stage);
 // 투자가 필요해지는 "느려지는 장벽"을 만듦 (즉시 0데미지로 막히는 "딱딱한 장벽" 대신).
 long long    PlayerBaseAtk(int stage);
 long long    PlayerBaseDef(int stage);
-long long    PlayerBaseMaxHp(int stage, int prestigeCount);
+long long    PlayerBaseMaxHp(int stage);
 // 방어력을 적용한 후 실제로 들어오는 피해 — 비율 기반 감소(체력/(체력+K))라 투자가
 // 클수록 효과가 크지만 0으로 완전히 막히지는 않음 (몹 성장이 항상 어느 정도는 위협이 됨).
 long long    MitigateDamage(long long incomingDmg, long long defValue);
 long long    GetUpgradeCost(const Upgrade& u);
-bool         PurchaseUpgrade(GameState& state, int id);
-void         InitTalentsForClass(GameState& state);
-bool         InvestTalent(GameState& state, int id);
-TalentBonuses ComputeTalentBonuses(const GameState& state);
-long long    PrestigeRequirement(int prestigeCount);
+bool         PurchaseUpgrade(Hero& hero, int id);
+void         InitTalentsForClass(Hero& hero);
+bool         InvestTalent(Hero& hero, int id);
+TalentBonuses ComputeTalentBonuses(const Hero& hero);
+std::wstring GameTick(Hero& hero, float legacyBonusPct);
+
+// ---- 로스터 / 계승 ----------------------------------------------------------
+bool         CreateOrSwitchHero(GameState& state, ClassType cls); // 없으면 새로 생성, 있으면 전환
+// 이 영웅의 투자량(업그레이드+특성+장비)에 비례한 계승 보너스를 계정에 더하고,
+// 이 영웅을 리셋해서 다시 키울 수 있게 함 (클래스/장비는 유지).
 void         DoPrestige(GameState& state);
-void         ResetGame(GameState& state); // 세이브 초기화 (직업 재선택부터 다시 시작)
-std::wstring GameTick(GameState& state);
+void         ResetAll(GameState& state); // 완전 초기화 — 로스터/계승 보너스까지 전부 삭제
+
+std::wstring GameTick(GameState& state); // 활성 영웅 1틱 (없으면 무동작)
 void         SaveGame(const GameState& state);
 void         LoadGame(GameState& state);

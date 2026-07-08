@@ -82,32 +82,42 @@ static LRESULT CALLBACK DashWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
-// ---- 클래스 선택 화면 -------------------------------------------------------
-static void ScreenClassSelect(GameState& state) {
+// ---- 영웅 로스터 화면 -------------------------------------------------------
+// 클래스당 슬롯 1개. 처음이면 새로 시작, 이미 키운 적 있으면 이어서 진행.
+// 언제든 이 화면으로 돌아와서 다른 영웅으로 전환할 수 있음 (진행 상황은 안 사라짐).
+static void ScreenHeroSelect(GameState& state) {
     ImGui::Spacing();
-    ImGui::TextDisabled("%s", T("직업을 선택하세요  (프레스티지 전까지는 변경 불가)",
-                                 "Choose a class  (locked until you prestige)"));
+    ImGui::TextDisabled("%s", T("영웅을 선택하세요  (전환해도 진행 상황은 유지됩니다)",
+                                 "Choose a hero  (switching keeps everyone's progress)"));
+    if (state.legacyPrestigeCount > 0) {
+        ImGui::TextDisabled(T("계승 보너스 +%.1f%% (누적 프레스티지 %d회)", "Legacy bonus +%.1f%% (%d total prestiges)"),
+                             state.legacyBonusPct, state.legacyPrestigeCount);
+    }
     ImGui::Separator();
     ImGui::Spacing();
 
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < GameState::ROSTER_SIZE; i++) {
         const ClassDef& c = kClasses[i];
+        const Hero& hero = state.heroes[i];
         ImGui::PushID(i);
 
-        // 직업 이름 버튼
-        if (ImGui::Button(c.Name(), {80, 48})) {
-            state.playerClass = (ClassType)(i + 1);
-            InitTalentsForClass(state);
+        char btnLabel[16];
+        snprintf(btnLabel, sizeof(btnLabel), "%s", c.Name());
+        if (ImGui::Button(btnLabel, {80, 48})) {
+            CreateOrSwitchHero(state, (ClassType)(i + 1));
             SaveGame(state);
         }
         ImGui::SameLine(100);
 
-        // 설명 블록
         ImGui::BeginGroup();
+        if (hero.everPlayed) {
+            ImGui::Text(T("Lv.%d  —  스테이지 %d", "Lv.%d  —  stage %d"), hero.level, hero.dungeon.stage);
+            if (hero.prestigeCount > 0)
+                ImGui::TextDisabled(T("프레스티지 %d회", "%d prestiges"), hero.prestigeCount);
+        } else {
+            ImGui::TextDisabled("%s", T("아직 키운 적 없음 — 처음부터 시작", "Not started yet — begin from scratch"));
+        }
         ImGui::TextDisabled("%s", c.Flavor());
-        ImGui::BulletText("%s", c.Stat0());
-        ImGui::BulletText("%s", c.Stat1());
-        ImGui::BulletText("%s", c.Stat2());
         ImGui::EndGroup();
 
         ImGui::Spacing();
@@ -127,6 +137,7 @@ static void FormatDuration(double sec, char* buf, int bufSize) {
 }
 
 static void TabStatus(GameState& state) {
+    Hero& hero = state.Active();
     ImGui::Spacing();
 
     ImGui::TextDisabled("IDLE AGENT  v0.1");
@@ -134,9 +145,23 @@ static void TabStatus(GameState& state) {
     ImGui::Spacing();
 
     char evt[128] = {};
-    ToUtf8(state.lastEvent, evt, sizeof(evt));
+    ToUtf8(hero.lastEvent, evt, sizeof(evt));
     ImGui::TextDisabled("%s", T("최근 이벤트", "Recent event"));
     ImGui::TextWrapped("%s", evt);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    ImGui::TextDisabled("%s", T("계승 보너스 (전 영웅 공용)", "Legacy bonus (shared by all heroes)"));
+    ImGui::Text("%s", T("현재 보너스", "Current bonus")); ImGui::SameLine(140);
+    ImGui::Text("+%.1f%%", state.legacyBonusPct);
+    ImGui::Text("%s", T("누적 프레스티지", "Total prestiges")); ImGui::SameLine(140);
+    ImGui::Text("%d", state.legacyPrestigeCount);
+    if (ImGui::Button(T("다른 영웅으로 전환", "Switch hero"), {320, 0})) {
+        SaveGame(state);
+        state.activeHero = -1;
+    }
 
     ImGui::Spacing();
     ImGui::Separator();
@@ -151,7 +176,7 @@ static void TabStatus(GameState& state) {
     ImGui::Text("%s", T("대시보드 노출", "Dashboard open"));   ImGui::SameLine(140);
     ImGui::Text(T("%s  (들킬 뻔한 시간)", "%s  (time you risked getting caught)"), dashBuf);
     ImGui::Text("%s", T("사망 횟수", "Deaths"));   ImGui::SameLine(140);
-    ImGui::Text(T("%lld 회  (이번 캐릭터 기준)", "%lld  (this character)"), state.deathCount);
+    ImGui::Text(T("%lld 회  (이 영웅 기준)", "%lld  (this hero)"), hero.deathCount);
 
     ImGui::Spacing();
     ImGui::Separator();
@@ -169,15 +194,16 @@ static void TabStatus(GameState& state) {
 }
 
 static void TabUpgrade(GameState& state) {
+    Hero& hero = state.Active();
     ImGui::Spacing();
 
-    ImGui::Text("%s", T("골드", "Gold"));      ImGui::SameLine(100); ImGui::Text("%lld G", state.gold);
+    ImGui::Text("%s", T("골드", "Gold"));      ImGui::SameLine(100); ImGui::Text("%lld G", hero.gold);
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
     for (int i = 0; i < UP_COUNT; i++) {
-        Upgrade& u = state.upgrades[i];
+        Upgrade& u = hero.upgrades[i];
         ImGui::PushID(i);
 
         // 이름 + 레벨
@@ -201,10 +227,10 @@ static void TabUpgrade(GameState& state) {
         if (maxed) snprintf(btnLabel, sizeof(btnLabel), "MAX");
         else       snprintf(btnLabel, sizeof(btnLabel), "%lld G", cost);
 
-        bool canBuy = !maxed && state.gold >= cost;
+        bool canBuy = !maxed && hero.gold >= cost;
         if (!canBuy) ImGui::BeginDisabled();
         if (ImGui::Button(btnLabel, {90, 0}))
-            PurchaseUpgrade(state, i);
+            PurchaseUpgrade(hero, i);
         if (!canBuy) ImGui::EndDisabled();
 
         ImGui::Spacing();
@@ -215,17 +241,12 @@ static void TabUpgrade(GameState& state) {
     ImGui::Separator();
     ImGui::Spacing();
 
-    ImGui::TextDisabled(T("프레스티지  (%d회 진행)", "Prestige  (%d done)"), state.prestigeCount);
-    ImGui::TextWrapped(T("회당 보너스: XP/골드/드랍률 +%.0f%%,  공격력 +%.0f%%,  최대체력 +%lld"
-                          "   (지금까지 %d회 × 위 수치 = 현재 적용 중인 총 보너스)",
-                          "Per run: +%.0f%% XP/gold/drop rate, +%.0f%% attack, +%lld max HP"
-                          "   (x%d runs so far = current total bonus)"),
-                        PRESTIGE_ECON_BONUS * 100.0f, PRESTIGE_ATK_BONUS * 100.0f, PRESTIGE_HP_BONUS,
-                        state.prestigeCount);
-    ImGui::TextDisabled("%s", T("실행하면 레벨/골드/장비(보관함)/스테이지가 초기화되고 직업을 다시 고릅니다.",
-                                 "Resets level/gold/gear(bag)/stage and lets you pick a class again."));
-    long long req = PrestigeRequirement(state.prestigeCount);
-    bool canPrestige = state.dungeon.stage >= req;
+    ImGui::TextDisabled(T("프레스티지  (이 영웅 %d회 진행)", "Prestige  (%d done by this hero)"), hero.prestigeCount);
+    ImGui::TextWrapped("%s", T("스테이지 40 이상에서 실행 가능. 지금까지 투자한 업그레이드/특성/장비량에 비례해서"
+                                " 계승 보너스(전 영웅 공용)가 오르고, 이 영웅은 리셋되어 다시 키울 수 있습니다.",
+                                "Available from stage 40+. Adds to the shared legacy bonus based on how much"
+                                " you've invested (upgrades/talents/gear), then resets this hero to grow again."));
+    bool canPrestige = hero.dungeon.stage >= PRESTIGE_STAGE_REQ;
     if (!canPrestige) ImGui::BeginDisabled();
     if (ImGui::Button(T("프레스티지 실행", "Prestige Now"), {320, 0})) {
         DoPrestige(state);
@@ -233,18 +254,20 @@ static void TabUpgrade(GameState& state) {
     }
     if (!canPrestige) ImGui::EndDisabled();
     if (!canPrestige)
-        ImGui::TextDisabled(T("스테이지 %lld 이상 도달 시 해금", "Unlocks at stage %lld"), req);
+        ImGui::TextDisabled(T("스테이지 %d 이상 도달 시 해금", "Unlocks at stage %d"), PRESTIGE_STAGE_REQ);
 
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
     static bool confirmReset = false;
-    ImGui::TextDisabled("%s", T("세이브 초기화", "Reset Save"));
+    ImGui::TextDisabled("%s", T("전체 초기화", "Full Reset"));
+    ImGui::TextWrapped("%s", T("모든 영웅과 계승 보너스를 통째로 삭제합니다 (위장 시간 기록/언어 설정만 유지).",
+                                "Wipes every hero and the legacy bonus entirely (keeps stealth log/language)."));
     ImGui::Checkbox(T("정말로 초기화할게요 (되돌릴 수 없음)", "Yes, really reset (cannot be undone)"), &confirmReset);
     if (!confirmReset) ImGui::BeginDisabled();
-    if (ImGui::Button(T("세이브 초기화 실행", "Reset Save Now"), {320, 0})) {
-        ResetGame(state);
+    if (ImGui::Button(T("전체 초기화 실행", "Full Reset Now"), {320, 0})) {
+        ResetAll(state);
         SaveGame(state);
         confirmReset = false;
     }
@@ -252,9 +275,9 @@ static void TabUpgrade(GameState& state) {
 }
 
 // slotStart..slotStart+count-1 구간의 특성 목록을 그려주는 공용 헬퍼 (1차/2차 공용)
-static void DrawTalentRows(GameState& state, int slotStart, int count, int& pool) {
+static void DrawTalentRows(Hero& hero, int slotStart, int count, int& pool) {
     for (int i = slotStart; i < slotStart + count; i++) {
-        Talent& t = state.talents[i];
+        Talent& t = hero.talents[i];
         ImGui::PushID(i);
 
         char header[64];
@@ -272,7 +295,7 @@ static void DrawTalentRows(GameState& state, int slotStart, int count, int& pool
         bool canInvest = !maxed && pool > 0;
         if (!canInvest) ImGui::BeginDisabled();
         if (ImGui::Button(maxed ? "MAX" : T("+1 투자", "+1 Invest"), {90, 0}))
-            InvestTalent(state, i);
+            InvestTalent(hero, i);
         if (!canInvest) ImGui::EndDisabled();
 
         ImGui::Spacing();
@@ -281,36 +304,37 @@ static void DrawTalentRows(GameState& state, int slotStart, int count, int& pool
 }
 
 static void TabTalent(GameState& state) {
+    Hero& hero = state.Active();
     ImGui::Spacing();
-    int spent1 = state.talents[TAL_0].level + state.talents[TAL_1].level + state.talents[TAL_2].level;
+    int spent1 = hero.talents[TAL_0].level + hero.talents[TAL_1].level + hero.talents[TAL_2].level;
     ImGui::TextDisabled(T("1차 특성  —  레벨업마다 1포인트, 평생 최대 %d포인트 (3개 다 풀업은 불가능)",
                            "Tier 1 talents  —  1 point/level-up, %d lifetime cap (can't max all 3)"),
                          MAX_TALENT_POINTS);
-    ImGui::Text("%s", T("보유 포인트", "Points available")); ImGui::SameLine(140); ImGui::Text("%d", state.talentPoints);
-    ImGui::Text("%s", T("누적 (보유+투자)", "Total earned"));   ImGui::SameLine(140); ImGui::Text("%d / %d", state.talentPoints + spent1, MAX_TALENT_POINTS);
+    ImGui::Text("%s", T("보유 포인트", "Points available")); ImGui::SameLine(140); ImGui::Text("%d", hero.talentPoints);
+    ImGui::Text("%s", T("누적 (보유+투자)", "Total earned"));   ImGui::SameLine(140); ImGui::Text("%d / %d", hero.talentPoints + spent1, MAX_TALENT_POINTS);
     ImGui::Separator();
     ImGui::Spacing();
 
-    DrawTalentRows(state, TAL_0, TIER1_TAL_COUNT, state.talentPoints);
+    DrawTalentRows(hero, TAL_0, TIER1_TAL_COUNT, hero.talentPoints);
 
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
-    if (state.level < TIER2_LEVEL_REQ) {
+    if (hero.level < TIER2_LEVEL_REQ) {
         ImGui::TextDisabled(T("2차 특성  —  레벨 %d부터 해금 (현재 Lv.%d)", "Tier 2 talents  —  unlocks at Lv.%d (currently Lv.%d)"),
-                             TIER2_LEVEL_REQ, state.level);
+                             TIER2_LEVEL_REQ, hero.level);
     } else {
-        int spent2 = state.talents[TAL_3].level + state.talents[TAL_4].level + state.talents[TAL_5].level;
+        int spent2 = hero.talents[TAL_3].level + hero.talents[TAL_4].level + hero.talents[TAL_5].level;
         ImGui::TextDisabled(T("2차 특성  —  레벨업마다 1포인트, 평생 최대 %d포인트 (1차와 별도 풀)",
                                "Tier 2 talents  —  1 point/level-up, %d lifetime cap (separate pool from tier 1)"),
                              MAX_TALENT_POINTS_T2);
-        ImGui::Text("%s", T("보유 포인트", "Points available")); ImGui::SameLine(140); ImGui::Text("%d", state.talentPoints2);
-        ImGui::Text("%s", T("누적 (보유+투자)", "Total earned"));   ImGui::SameLine(140); ImGui::Text("%d / %d", state.talentPoints2 + spent2, MAX_TALENT_POINTS_T2);
+        ImGui::Text("%s", T("보유 포인트", "Points available")); ImGui::SameLine(140); ImGui::Text("%d", hero.talentPoints2);
+        ImGui::Text("%s", T("누적 (보유+투자)", "Total earned"));   ImGui::SameLine(140); ImGui::Text("%d / %d", hero.talentPoints2 + spent2, MAX_TALENT_POINTS_T2);
         ImGui::Separator();
         ImGui::Spacing();
 
-        DrawTalentRows(state, TAL_3, TIER2_TAL_COUNT, state.talentPoints2);
+        DrawTalentRows(hero, TAL_3, TIER2_TAL_COUNT, hero.talentPoints2);
     }
 }
 
@@ -325,7 +349,7 @@ static ImVec4 GradeColor(Grade g) {
 }
 
 static void TabEquipment(GameState& state) {
-    Inventory& inv = state.inventory;
+    Inventory& inv = state.Active().inventory;
     ImGui::Spacing();
 
     // ---- 장착 슬롯 ----------------------------------------------------------
@@ -411,27 +435,29 @@ static void TabEquipment(GameState& state) {
 }
 
 static void TabDungeon(GameState& state) {
-    Dungeon& d = state.dungeon;
+    Hero& hero = state.Active();
+    Dungeon& d = hero.dungeon;
+    float legacyBonusPct = state.legacyBonusPct;
     ImGui::Spacing();
 
     // ---- 캐릭터 상태 (적 체력과 바로 비교되도록 같은 너비로 위에 배치) ----------
     char clsBuf[64];
-    const char* clsName = (state.playerClass != CLASS_NONE)
-                          ? kClasses[(int)state.playerClass - 1].Name() : "?";
-    snprintf(clsBuf, sizeof(clsBuf), "Lv.%d  [%s]", state.level, clsName);
+    const char* clsName = (hero.playerClass != CLASS_NONE)
+                          ? kClasses[(int)hero.playerClass - 1].Name() : "?";
+    snprintf(clsBuf, sizeof(clsBuf), "Lv.%d  [%s]", hero.level, clsName);
     ImGui::Text("%s", T("영웅", "Hero"));      ImGui::SameLine(100); ImGui::Text("%s", clsBuf);
 
     ImGui::Spacing();
     ImGui::Text("XP");        ImGui::SameLine(100);
     char xpOverlay[32];
-    snprintf(xpOverlay, sizeof(xpOverlay), "%lld / %lld", state.xp, state.xpForNext());
-    ImGui::ProgressBar(state.xpProgress(), {320, 0}, xpOverlay);
+    snprintf(xpOverlay, sizeof(xpOverlay), "%lld / %lld", hero.xp, hero.xpForNext());
+    ImGui::ProgressBar(hero.xpProgress(), {320, 0}, xpOverlay);
 
     ImGui::Spacing();
     ImGui::Text("%s", T("내 체력", "My HP"));    ImGui::SameLine(100);
     char playerHpOverlay[32];
-    snprintf(playerHpOverlay, sizeof(playerHpOverlay), "%lld / %lld", state.playerHp, state.playerMaxHp);
-    float playerHpFrac = (state.playerMaxHp > 0) ? (float)state.playerHp / (float)state.playerMaxHp : 0.0f;
+    snprintf(playerHpOverlay, sizeof(playerHpOverlay), "%lld / %lld", hero.playerHp, hero.playerMaxHp);
+    float playerHpFrac = (hero.playerMaxHp > 0) ? (float)hero.playerHp / (float)hero.playerMaxHp : 0.0f;
     ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.30f, 0.80f, 0.35f, 1.0f));
     ImGui::ProgressBar(playerHpFrac, {320, 0}, playerHpOverlay);
     ImGui::PopStyleColor();
@@ -466,19 +492,19 @@ static void TabDungeon(GameState& state) {
     ImGui::Separator();
     ImGui::Spacing();
 
-    TalentBonuses tal = ComputeTalentBonuses(state);
-    float atkMult = 1.0f + GetEquippedBonus(state.inventory, StatType::Attack)
-                         + state.prestigeCount * PRESTIGE_ATK_BONUS
-                         + state.upgrades[UP_ATK].level * state.upgrades[UP_ATK].multiplier
+    TalentBonuses tal = ComputeTalentBonuses(hero);
+    float atkMult = 1.0f + GetEquippedBonus(hero.inventory, StatType::Attack)
+                         + legacyBonusPct
+                         + hero.upgrades[UP_ATK].level * hero.upgrades[UP_ATK].multiplier
                          + tal.atkBonus;
     // 공격속도는 데미지 배율이 아니라 "한 틱에 평균 몇 번 때리는지"를 나타냄 (game.cpp와 동일 모델)
-    float atkSpeedBonus = GetEquippedBonus(state.inventory, StatType::AtkSpeed) + tal.atkSpeedBonus;
+    float atkSpeedBonus = GetEquippedBonus(hero.inventory, StatType::AtkSpeed) + tal.atkSpeedBonus;
     float expectedAttacks = 1.0f + atkSpeedBonus;
     long long baseAtk = (long long)(PlayerBaseAtk(d.stage) * atkMult);
     long long enemyDef = EnemyDefForStage(d.stage);
     long long enemyAtk = EnemyAtkForStage(d.stage);
-    long long playerDef = (long long)(PlayerBaseDef(d.stage) * (1.0f + GetEquippedBonus(state.inventory, StatType::Defense) + tal.defenseBonus));
-    float lifestealPct = GetEquippedBonus(state.inventory, StatType::Lifesteal) + tal.lifestealBonus;
+    long long playerDef = (long long)(PlayerBaseDef(d.stage) * (1.0f + GetEquippedBonus(hero.inventory, StatType::Defense) + tal.defenseBonus + legacyBonusPct));
+    float lifestealPct = GetEquippedBonus(hero.inventory, StatType::Lifesteal) + tal.lifestealBonus;
     long long dmgToPlayer = MitigateDamage(enemyAtk, playerDef);
     dmgToPlayer = (long long)(dmgToPlayer * (1.0f - (std::min)(0.9f, tal.evasionBonus)));
 
@@ -491,8 +517,8 @@ static void TabDungeon(GameState& state) {
     }
     if (lifestealPct > 0.0f) {
         ImGui::Text("%s", T("체력흡수", "Lifesteal")); ImGui::SameLine(100); ImGui::Text("%.0f%%", lifestealPct * 100.0f);
-        if (state.lastHealAmount > 0)
-            ImGui::TextColored({0.4f, 0.9f, 0.5f, 1.0f}, T("  ↳ 방금 +%lld 회복", "  -> just healed +%lld"), state.lastHealAmount);
+        if (hero.lastHealAmount > 0)
+            ImGui::TextColored({0.4f, 0.9f, 0.5f, 1.0f}, T("  ↳ 방금 +%lld 회복", "  -> just healed +%lld"), hero.lastHealAmount);
     }
     if (dmgToPlayer > 0) {
         ImGui::TextColored({1.0f, 0.4f, 0.3f, 1.0f},
@@ -504,7 +530,7 @@ static void TabDungeon(GameState& state) {
 
     ImGui::Spacing();
     long long rawHit = 0, critHit = 0;
-    switch (state.playerClass) {
+    switch (hero.playerClass) {
     case CLASS_WARRIOR:
         rawHit = (long long)(baseAtk * 1.5f) * (d.bossStage ? 2 : 1);
         if (d.bossStage) rawHit = (long long)(rawHit * (1.0f + tal.bossDmgBonus));
@@ -638,8 +664,8 @@ void DashboardFrame(GameState& state) {
         ImGui::EndChild();
     };
 
-    if (state.playerClass == CLASS_NONE) {
-        ScreenClassSelect(state);
+    if (state.activeHero < 0) {
+        ScreenHeroSelect(state);
     } else if (ImGui::BeginTabBar("##tabs")) {
         if (ImGui::BeginTabItem(T("현황", "Status")))    { TabScrollable("##s1", TabStatus,    state); ImGui::EndTabItem(); }
         if (ImGui::BeginTabItem(T("업그레이드", "Upgrade"))) { TabScrollable("##s2", TabUpgrade,   state); ImGui::EndTabItem(); }

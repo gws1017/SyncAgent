@@ -24,3 +24,9 @@ FILE* OpenSaveFileForWrite() {
     _wfopen_s(&f, SaveFilePath().c_str(), L"w");
     return f;
 }
+
+void BackupSaveFile() {
+    std::wstring path = SaveFilePath();
+    std::wstring bak  = path + L".bak";
+    CopyFileW(path.c_str(), bak.c_str(), FALSE); // 원본이 없거나 실패해도 그냥 무시
+}

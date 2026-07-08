@@ -39,11 +39,11 @@ const ClassDef kClasses[3] = {
 };
 
 // ---- 업그레이드 초기화 -------------------------------------------------------
-static void InitUpgrades(GameState& state) {
-    state.upgrades[UP_XP]   = { "수련 강도", "Training",  "XP 획득량 +20% / 레벨",  "+20% XP gain / level",   0, 10,  50, 0.20f };
-    state.upgrades[UP_GOLD] = { "채집 효율", "Gathering", "골드 획득량 +20% / 레벨", "+20% gold gain / level", 0, 10,  80, 0.20f };
-    state.upgrades[UP_DROP] = { "탐색 본능", "Scavenging","드랍률 +10% / 레벨",      "+10% drop rate / level", 0, 10, 120, 0.10f };
-    state.upgrades[UP_ATK]  = { "전투 본능", "Combat",    "공격력 +15% / 레벨",      "+15% attack / level",    0, 10, 100, 0.15f };
+static void InitUpgrades(Hero& hero) {
+    hero.upgrades[UP_XP]   = { "수련 강도", "Training",  "XP 획득량 +20% / 레벨",  "+20% XP gain / level",   0, 10,  50, 0.20f };
+    hero.upgrades[UP_GOLD] = { "채집 효율", "Gathering", "골드 획득량 +20% / 레벨", "+20% gold gain / level", 0, 10,  80, 0.20f };
+    hero.upgrades[UP_DROP] = { "탐색 본능", "Scavenging","드랍률 +10% / 레벨",      "+10% drop rate / level", 0, 10, 120, 0.10f };
+    hero.upgrades[UP_ATK]  = { "전투 본능", "Combat",    "공격력 +15% / 레벨",      "+15% attack / level",    0, 10, 100, 0.15f };
 }
 
 // ---- 특성 -------------------------------------------------------------------
@@ -77,42 +77,42 @@ const Talent kTalentDefs[3][TAL_COUNT] = {
     },
 };
 
-void InitTalentsForClass(GameState& state) {
-    int idx = (int)state.playerClass - 1;
+void InitTalentsForClass(Hero& hero) {
+    int idx = (int)hero.playerClass - 1;
     if (idx < 0 || idx >= 3) return; // CLASS_NONE이거나 손상된 값이면 건너뜀 (배열 범위 밖 접근 방지)
     for (int i = 0; i < TAL_COUNT; i++) {
-        int savedLevel = state.talents[i].level;
-        state.talents[i] = kTalentDefs[idx][i];
-        state.talents[i].level = savedLevel; // 레벨 보존 (저장 불러오기/순서 무관하게 안전)
+        int savedLevel = hero.talents[i].level;
+        hero.talents[i] = kTalentDefs[idx][i];
+        hero.talents[i].level = savedLevel; // 레벨 보존 (저장 불러오기/순서 무관하게 안전)
     }
 }
 
-TalentBonuses ComputeTalentBonuses(const GameState& state) {
+TalentBonuses ComputeTalentBonuses(const Hero& hero) {
     TalentBonuses b;
-    switch (state.playerClass) {
+    switch (hero.playerClass) {
     case CLASS_WARRIOR:
-        b.defenseBonus = state.talents[TAL_0].level * 0.10f; // 철벽 방어
-        b.atkBonus     = state.talents[TAL_1].level * 0.08f; // 전장의 분노
-        b.bossDmgBonus = state.talents[TAL_2].level * 0.15f; // 처단자
-        b.hpBonus      = state.talents[TAL_3].level * 0.05f; // 불굴의 의지
-        b.atkBonus    += state.talents[TAL_4].level * 0.06f; // 광전사
-        b.defenseBonus+= state.talents[TAL_5].level * 0.08f; // 수호자
+        b.defenseBonus = hero.talents[TAL_0].level * 0.10f; // 철벽 방어
+        b.atkBonus     = hero.talents[TAL_1].level * 0.08f; // 전장의 분노
+        b.bossDmgBonus = hero.talents[TAL_2].level * 0.15f; // 처단자
+        b.hpBonus      = hero.talents[TAL_3].level * 0.05f; // 불굴의 의지
+        b.atkBonus    += hero.talents[TAL_4].level * 0.06f; // 광전사
+        b.defenseBonus+= hero.talents[TAL_5].level * 0.08f; // 수호자
         break;
     case CLASS_MAGE:
-        b.critDmgBonus    = state.talents[TAL_0].level * 0.15f; // 마나 증폭
-        b.critChanceBonus = state.talents[TAL_1].level * 2.0f;  // 마력 폭주
-        b.lifestealBonus  = state.talents[TAL_2].level * 0.03f; // 마나 흡혈
-        b.hpBonus         = state.talents[TAL_3].level * 0.05f; // 마나 코어
-        b.critDmgBonus   += state.talents[TAL_4].level * 0.10f; // 원소 폭발
-        b.lifestealBonus += state.talents[TAL_5].level * 0.02f; // 흡혼
+        b.critDmgBonus    = hero.talents[TAL_0].level * 0.15f; // 마나 증폭
+        b.critChanceBonus = hero.talents[TAL_1].level * 2.0f;  // 마력 폭주
+        b.lifestealBonus  = hero.talents[TAL_2].level * 0.03f; // 마나 흡혈
+        b.hpBonus         = hero.talents[TAL_3].level * 0.05f; // 마나 코어
+        b.critDmgBonus   += hero.talents[TAL_4].level * 0.10f; // 원소 폭발
+        b.lifestealBonus += hero.talents[TAL_5].level * 0.02f; // 흡혼
         break;
     case CLASS_ROGUE:
-        b.atkSpeedBonus  = state.talents[TAL_0].level * 0.10f; // 연속 공격
-        b.extraAtkChance = state.talents[TAL_1].level * 4.0f;  // 기습
-        b.evasionBonus   = state.talents[TAL_2].level * 0.05f; // 은신 회피
-        b.atkSpeedBonus += state.talents[TAL_3].level * 0.06f; // 쾌속
-        b.extraAtkChance+= state.talents[TAL_4].level * 3.0f;  // 치명적 기습
-        b.evasionBonus  += state.talents[TAL_5].level * 0.04f; // 야성
+        b.atkSpeedBonus  = hero.talents[TAL_0].level * 0.10f; // 연속 공격
+        b.extraAtkChance = hero.talents[TAL_1].level * 4.0f;  // 기습
+        b.evasionBonus   = hero.talents[TAL_2].level * 0.05f; // 은신 회피
+        b.atkSpeedBonus += hero.talents[TAL_3].level * 0.06f; // 쾌속
+        b.extraAtkChance+= hero.talents[TAL_4].level * 3.0f;  // 치명적 기습
+        b.evasionBonus  += hero.talents[TAL_5].level * 0.04f; // 야성
         break;
     default:
         break;
@@ -150,8 +150,8 @@ long long PlayerBaseDef(int stage) {
     return (long long)(10.0 + stage * 0.75); // 적 공격력(1.5/stage)의 절반 속도
 }
 
-long long PlayerBaseMaxHp(int stage, int prestigeCount) {
-    return 200 + (long long)stage * 8 + (long long)prestigeCount * PRESTIGE_HP_BONUS;
+long long PlayerBaseMaxHp(int stage) {
+    return 200 + (long long)stage * 8;
 }
 
 // 방어력 적용 — 비율 기반 감소(diminishing returns). defValue가 커질수록 감소율이
@@ -164,8 +164,8 @@ long long MitigateDamage(long long incomingDmg, long long defValue) {
     return (long long)(incomingDmg * (1.0 - reduction));
 }
 
-// 스테이지에 따라 드랍 등급 분포가 달라짐 — 프레스티지 첫 해금 지점부터 희귀가
-// 섞이기 시작하고, 더 깊이 가면 영웅도 소량 나옴 (전설은 합성으로만 획득).
+// 스테이지가 깊어질수록 드랍 등급 분포가 좋아짐 — 20층부터 희귀가 섞이고,
+// 40층(프레스티지 해금)부터는 영웅도 소량 나옴 (전설은 합성으로만 획득).
 static Grade RollDropGrade(int stage) {
     std::uniform_int_distribution<int> roll(1, 100);
     int r = roll(g_rng);
@@ -174,7 +174,7 @@ static Grade RollDropGrade(int stage) {
         if (r <= 25) return Grade::Rare; // 5 + 20
         return Grade::Common;
     }
-    if (stage >= PRESTIGE_STAGE_REQ) {
+    if (stage >= 20) {
         if (r <= 20) return Grade::Rare;
         return Grade::Common;
     }
@@ -198,23 +198,23 @@ long long GetUpgradeCost(const Upgrade& u) {
     return (long long)(u.baseCost * std::pow(2.0, u.level));
 }
 
-bool PurchaseUpgrade(GameState& state, int id) {
+bool PurchaseUpgrade(Hero& hero, int id) {
     if (id < 0 || id >= UP_COUNT) return false;
-    Upgrade& u = state.upgrades[id];
+    Upgrade& u = hero.upgrades[id];
     if (u.level >= u.maxLevel) return false;
     long long cost = GetUpgradeCost(u);
-    if (state.gold < cost) return false;
-    state.gold -= cost;
+    if (hero.gold < cost) return false;
+    hero.gold -= cost;
     u.level++;
     return true;
 }
 
-bool InvestTalent(GameState& state, int id) {
+bool InvestTalent(Hero& hero, int id) {
     if (id < 0 || id >= TAL_COUNT) return false;
     bool isTier2 = id >= TIER1_TAL_COUNT;
-    if (isTier2 && state.level < TIER2_LEVEL_REQ) return false; // 2차는 25레벨부터
-    int& pool = isTier2 ? state.talentPoints2 : state.talentPoints;
-    Talent& t = state.talents[id];
+    if (isTier2 && hero.level < TIER2_LEVEL_REQ) return false; // 2차는 25레벨부터
+    int& pool = isTier2 ? hero.talentPoints2 : hero.talentPoints;
+    Talent& t = hero.talents[id];
     if (t.level >= t.maxLevel) return false;
     if (pool <= 0) return false;
     pool--;
@@ -222,93 +222,123 @@ bool InvestTalent(GameState& state, int id) {
     return true;
 }
 
-long long PrestigeRequirement(int prestigeCount) {
-    return PRESTIGE_STAGE_REQ + (long long)prestigeCount * 10;
+// 영웅 한 명의 투자량(업그레이드+특성+장비)을 계승 보너스 %로 환산.
+// 초반엔 작은 보너스, 풀투자 영웅은 큰 보너스 — 여러 영웅에 걸쳐 누적되는 자원.
+static float ComputeLegacyGain(const Hero& hero) {
+    int investScore = 0;
+    for (int i = 0; i < UP_COUNT; i++) investScore += hero.upgrades[i].level;
+    for (int i = 0; i < TAL_COUNT; i++) investScore += hero.talents[i].level;
+    for (const Item& it : hero.inventory.equipped) investScore += (int)(it.bonus * 100.0f);
+    return investScore * 0.15f; // %p
+}
+
+bool CreateOrSwitchHero(GameState& state, ClassType cls) {
+    int idx = (int)cls - 1;
+    if (idx < 0 || idx >= GameState::ROSTER_SIZE) return false;
+    Hero& hero = state.heroes[idx];
+    if (!hero.everPlayed) {
+        hero = Hero{};
+        hero.playerClass = cls;
+        hero.everPlayed  = true;
+        InitUpgrades(hero);
+        InitTalentsForClass(hero);
+    }
+    state.activeHero = idx;
+    return true;
 }
 
 void DoPrestige(GameState& state) {
-    // 유지: 장착 장비, 프레스티지 횟수, 위장 시간 기록. 클래스는 다시 선택하게 함
-    // (직업을 바꿔서 다른 빌드를 시도해볼 수 있도록).
-    std::vector<Item>  equipped = state.inventory.equipped;
-    int                pc       = state.prestigeCount + 1;
-    double             runSec   = state.totalRunSec;
-    double             dashSec  = state.dashboardOpenSec;
+    if (state.activeHero < 0) return;
+    Hero& hero = state.Active();
 
-    state = GameState{};
-    InitUpgrades(state);
+    float gain = ComputeLegacyGain(hero);
+    state.legacyBonusPct += gain;
+    state.legacyPrestigeCount++;
 
-    state.inventory.equipped   = equipped;
-    state.prestigeCount        = pc;
-    state.totalRunSec          = runSec;
-    state.dashboardOpenSec     = dashSec;
-    state.lastEvent            = TW(L"[sync] 프레스티지 완료 — 직업을 다시 선택하세요", L"[sync] Prestige complete — choose a class again");
+    // 유지: 클래스, 장착 장비, 이 영웅의 프레스티지 횟수. 나머지는 리셋해서 다시 키움.
+    ClassType          cls      = hero.playerClass;
+    std::vector<Item>  equipped = hero.inventory.equipped;
+    int                pc       = hero.prestigeCount + 1;
+
+    hero = Hero{};
+    hero.playerClass = cls;
+    hero.everPlayed  = true;
+    hero.prestigeCount = pc;
+    InitUpgrades(hero);
+    InitTalentsForClass(hero);
+    hero.inventory.equipped = equipped;
+
+    wchar_t buf[128];
+    swprintf(buf, 128, TW(L"[sync] 프레스티지 완료 — 계승 보너스 +%.1f%% (총 %.1f%%)",
+                           L"[sync] Prestige complete — legacy bonus +%.1f%% (total %.1f%%)"),
+              gain, state.legacyBonusPct);
+    hero.lastEvent = buf;
 }
 
-void ResetGame(GameState& state) {
+void ResetAll(GameState& state) {
     double runSec  = state.totalRunSec;
     double dashSec = state.dashboardOpenSec;
+    int    lang    = state.language;
     state = GameState{};
-    InitUpgrades(state);
-    state.totalRunSec      = runSec;  // 위장 시간 기록은 세이브 초기화에도 유지
+    state.totalRunSec      = runSec;  // 위장 시간 기록은 초기화에도 유지
     state.dashboardOpenSec = dashSec;
-    state.lastEvent        = TW(L"[sync] 초기화 완료", L"[sync] Reset complete");
+    state.language         = lang;
 }
 
-std::wstring GameTick(GameState& state) {
-    if (state.dungeon.enemyMaxHp == 0)
-        InitDungeonStage(state.dungeon);
+std::wstring GameTick(Hero& hero, float legacyBonusPct) {
+    if (hero.dungeon.enemyMaxHp == 0)
+        InitDungeonStage(hero.dungeon);
 
     // 업그레이드 + 클래스 배율 계산
-    float xpMult   = 1.0f + state.upgrades[UP_XP].level   * state.upgrades[UP_XP].multiplier;
-    float goldMult = 1.0f + state.upgrades[UP_GOLD].level  * state.upgrades[UP_GOLD].multiplier;
-    float dropMult = 1.0f + state.upgrades[UP_DROP].level  * state.upgrades[UP_DROP].multiplier;
+    float xpMult   = 1.0f + hero.upgrades[UP_XP].level   * hero.upgrades[UP_XP].multiplier;
+    float goldMult = 1.0f + hero.upgrades[UP_GOLD].level  * hero.upgrades[UP_GOLD].multiplier;
+    float dropMult = 1.0f + hero.upgrades[UP_DROP].level  * hero.upgrades[UP_DROP].multiplier;
 
-    // 프레스티지 영구 보너스 (회당: XP/골드/드랍률 +15%, 공격력 +10%, 최대체력 +20 — game.h 상수 참고)
-    float prestigeBonus = state.prestigeCount * PRESTIGE_ECON_BONUS;
-    xpMult   += prestigeBonus;
-    goldMult += prestigeBonus;
-    dropMult += prestigeBonus;
+    // 계승 보너스 — 어떤 영웅이든 프레스티지할 때마다 쌓이는 계정 전체 공용 보너스
+    xpMult   += legacyBonusPct;
+    goldMult += legacyBonusPct;
+    dropMult += legacyBonusPct;
 
-    if (state.playerClass == CLASS_MAGE)    xpMult   *= 1.5f;
-    if (state.playerClass == CLASS_WARRIOR) goldMult *= 1.2f;
-    if (state.playerClass == CLASS_ROGUE)   goldMult *= 1.3f;
-    if (state.playerClass == CLASS_ROGUE)   dropMult *= 2.0f;
+    if (hero.playerClass == CLASS_MAGE)    xpMult   *= 1.5f;
+    if (hero.playerClass == CLASS_WARRIOR) goldMult *= 1.2f;
+    if (hero.playerClass == CLASS_ROGUE)   goldMult *= 1.3f;
+    if (hero.playerClass == CLASS_ROGUE)   dropMult *= 2.0f;
 
     // 장착 아이템 스탯 반영
-    xpMult   += GetEquippedBonus(state.inventory, StatType::Xp);
-    goldMult += GetEquippedBonus(state.inventory, StatType::Gold);
-    dropMult += GetEquippedBonus(state.inventory, StatType::Drop);
+    xpMult   += GetEquippedBonus(hero.inventory, StatType::Xp);
+    goldMult += GetEquippedBonus(hero.inventory, StatType::Gold);
+    dropMult += GetEquippedBonus(hero.inventory, StatType::Drop);
 
-    long long xpGain   = (long long)((5 + state.level * 2) * xpMult);
-    long long goldGain = (long long)((3 + state.level)     * goldMult);
-    state.xp   += xpGain;
-    state.gold += goldGain;
+    long long xpGain   = (long long)((5 + hero.level * 2) * xpMult);
+    long long goldGain = (long long)((3 + hero.level)     * goldMult);
+    hero.xp   += xpGain;
+    hero.gold += goldGain;
 
     std::wstring notify;
 
-    TalentBonuses tal = ComputeTalentBonuses(state);
+    TalentBonuses tal = ComputeTalentBonuses(hero);
 
-    // 플레이어 체력 — 스테이지에 따라 소폭 성장 + 프레스티지마다 추가 증가 + 2차 특성 보너스
-    long long maxHp = (long long)(PlayerBaseMaxHp(state.dungeon.stage, state.prestigeCount) * (1.0f + tal.hpBonus));
-    state.playerMaxHp = maxHp;
-    if (state.playerHp <= 0 || state.playerHp > maxHp) state.playerHp = maxHp;
+    // 플레이어 체력 — 스테이지에 따라 소폭 성장 + 계승 보너스 + 2차 특성 보너스
+    long long maxHp = (long long)(PlayerBaseMaxHp(hero.dungeon.stage) * (1.0f + tal.hpBonus + legacyBonusPct));
+    hero.playerMaxHp = maxHp;
+    if (hero.playerHp <= 0 || hero.playerHp > maxHp) hero.playerHp = maxHp;
 
     // 던전 전투 — 클래스별 공격 방식
     // 공격력 기반값은 몹보다 느리게 스테이지를 따라 성장하고, 그 위에
-    // 투자(업그레이드/장비/프레스티지/특성)가 곱연산으로 얹힘 — 투자가 여전히 핵심.
-    float atkMult = 1.0f + GetEquippedBonus(state.inventory, StatType::Attack)
-                         + state.prestigeCount * PRESTIGE_ATK_BONUS
-                         + state.upgrades[UP_ATK].level * state.upgrades[UP_ATK].multiplier
+    // 투자(업그레이드/장비/계승/특성)가 곱연산으로 얹힘 — 투자가 여전히 핵심.
+    float atkMult = 1.0f + GetEquippedBonus(hero.inventory, StatType::Attack)
+                         + legacyBonusPct
+                         + hero.upgrades[UP_ATK].level * hero.upgrades[UP_ATK].multiplier
                          + tal.atkBonus;
     // 공격속도 — 데미지를 곱해 늘리는 게 아니라 "한 틱에 몇 번 때리는지"를 결정함.
     // 정수 부분만큼 추가 공격이 확정되고, 소수 부분은 그 확률로 한 번 더 때림.
-    float atkSpeedBonus = GetEquippedBonus(state.inventory, StatType::AtkSpeed) + tal.atkSpeedBonus;
-    long long baseAtk = (long long)(PlayerBaseAtk(state.dungeon.stage) * atkMult);
+    float atkSpeedBonus = GetEquippedBonus(hero.inventory, StatType::AtkSpeed) + tal.atkSpeedBonus;
+    long long baseAtk = (long long)(PlayerBaseAtk(hero.dungeon.stage) * atkMult);
     long long totalDmg = 0;
-    switch (state.playerClass) {
+    switch (hero.playerClass) {
     case CLASS_WARRIOR:
         totalDmg = (long long)(baseAtk * 1.5f);
-        if (state.dungeon.bossStage) {
+        if (hero.dungeon.bossStage) {
             totalDmg *= 2;  // 보스 특화
             totalDmg = (long long)(totalDmg * (1.0f + tal.bossDmgBonus)); // 처단자
         }
@@ -343,109 +373,114 @@ std::wstring GameTick(GameState& state) {
         if (procRoll(g_rng) <= tal.extraAtkChance) totalDmg *= 2;
     }
 
-    long long enemyDef = EnemyDefForStage(state.dungeon.stage);
+    long long enemyDef = EnemyDefForStage(hero.dungeon.stage);
     totalDmg = std::max(0LL, totalDmg - enemyDef);
-    state.dungeon.enemyHp -= totalDmg;
+    hero.dungeon.enemyHp -= totalDmg;
 
     // 체력흡수 — 실제로 들어간 데미지 기준으로 회복 (장비 + 마법사 마나 흡혈)
-    float lifestealPct = GetEquippedBonus(state.inventory, StatType::Lifesteal) + tal.lifestealBonus;
-    state.lastHealAmount = 0;
+    float lifestealPct = GetEquippedBonus(hero.inventory, StatType::Lifesteal) + tal.lifestealBonus;
+    hero.lastHealAmount = 0;
     if (totalDmg > 0 && lifestealPct > 0.0f) {
         long long heal = (long long)(totalDmg * lifestealPct);
-        long long before = state.playerHp;
-        state.playerHp = std::min(maxHp, state.playerHp + heal);
-        state.lastHealAmount = state.playerHp - before; // 화면에 "+N 회복" 표시용
+        long long before = hero.playerHp;
+        hero.playerHp = std::min(maxHp, hero.playerHp + heal);
+        hero.lastHealAmount = hero.playerHp - before; // 화면에 "+N 회복" 표시용
     }
 
-    if (state.dungeon.enemyHp <= 0) {
-        long long reward   = state.dungeon.stage * 10LL * (state.dungeon.bossStage ? 3 : 1);
-        long long xpReward = state.dungeon.stage * 5LL;
-        state.gold += reward;
-        state.xp   += xpReward;
+    if (hero.dungeon.enemyHp <= 0) {
+        long long reward   = hero.dungeon.stage * 10LL * (hero.dungeon.bossStage ? 3 : 1);
+        long long xpReward = hero.dungeon.stage * 5LL;
+        hero.gold += reward;
+        hero.xp   += xpReward;
 
         wchar_t buf[128];
-        if (state.dungeon.bossStage)
-            swprintf(buf, 128, TW(L"[sync] 보스 처치! 스테이지 %d 클리어 (+%lld G)", L"[sync] Boss defeated! Stage %d cleared (+%lld G)"), state.dungeon.stage, reward);
+        if (hero.dungeon.bossStage)
+            swprintf(buf, 128, TW(L"[sync] 보스 처치! 스테이지 %d 클리어 (+%lld G)", L"[sync] Boss defeated! Stage %d cleared (+%lld G)"), hero.dungeon.stage, reward);
         else
-            swprintf(buf, 128, TW(L"[sync] 스테이지 %d 클리어 (+%lld G)", L"[sync] Stage %d cleared (+%lld G)"), state.dungeon.stage, reward);
-        state.lastEvent = buf;
-        if (state.dungeon.bossStage) notify = buf; // 보스만 알림, 일반 클리어는 조용히
+            swprintf(buf, 128, TW(L"[sync] 스테이지 %d 클리어 (+%lld G)", L"[sync] Stage %d cleared (+%lld G)"), hero.dungeon.stage, reward);
+        hero.lastEvent = buf;
+        if (hero.dungeon.bossStage) notify = buf; // 보스만 알림, 일반 클리어는 조용히
 
-        state.dungeon.stage++;
-        InitDungeonStage(state.dungeon);
-        state.playerHp = state.playerMaxHp; // 스테이지 클리어 시 체력 리필
+        hero.dungeon.stage++;
+        InitDungeonStage(hero.dungeon);
+        hero.playerHp = hero.playerMaxHp; // 스테이지 클리어 시 체력 리필
     }
 
     // 적 반격 — 방어력/체력흡수 투자가 부족하면 죽어서 전투가 리셋됨 (스테이지는 유지)
-    long long playerDef = (long long)(PlayerBaseDef(state.dungeon.stage) * (1.0f + GetEquippedBonus(state.inventory, StatType::Defense) + tal.defenseBonus));
-    long long enemyAtk   = EnemyAtkForStage(state.dungeon.stage);
+    long long playerDef = (long long)(PlayerBaseDef(hero.dungeon.stage) * (1.0f + GetEquippedBonus(hero.inventory, StatType::Defense) + tal.defenseBonus + legacyBonusPct));
+    long long enemyAtk   = EnemyAtkForStage(hero.dungeon.stage);
     long long dmgToPlayer = MitigateDamage(enemyAtk, playerDef);
     dmgToPlayer = (long long)(dmgToPlayer * (1.0f - std::min(0.9f, tal.evasionBonus))); // 은신 회피
-    state.playerHp -= dmgToPlayer;
-    if (state.playerHp <= 0) {
-        state.playerHp = state.playerMaxHp;
-        state.dungeon.enemyHp = state.dungeon.enemyMaxHp;
-        state.deathCount++;
-        state.lastEvent = TW(L"[sync] 패배 — 전투 초기화. 방어력/체력흡수를 보강하세요.",
-                              L"[sync] Defeated — fight reset. Boost your defense/lifesteal.");
+    hero.playerHp -= dmgToPlayer;
+    if (hero.playerHp <= 0) {
+        hero.playerHp = hero.playerMaxHp;
+        hero.dungeon.enemyHp = hero.dungeon.enemyMaxHp;
+        hero.deathCount++;
+        hero.lastEvent = TW(L"[sync] 패배 — 전투 초기화. 방어력/체력흡수를 보강하세요.",
+                             L"[sync] Defeated — fight reset. Boost your defense/lifesteal.");
         // 막혀서 매 틱 죽는 상황에선 알림이 도배되므로 토스트는 띄우지 않음
     }
 
     // 레벨업 (대시보드 현황에만 표시, 알림 없음) — 레벨업마다 1차 특성 포인트 1개,
     // 25레벨부터는 2차 특성 포인트도 1개 추가 지급. 각각 평생 캡(15)까지만.
-    while (state.xp >= state.xpForNext()) {
-        state.xp -= state.xpForNext();
-        state.level++;
+    while (hero.xp >= hero.xpForNext()) {
+        hero.xp -= hero.xpForNext();
+        hero.level++;
 
-        int spent1 = state.talents[TAL_0].level + state.talents[TAL_1].level + state.talents[TAL_2].level;
+        int spent1 = hero.talents[TAL_0].level + hero.talents[TAL_1].level + hero.talents[TAL_2].level;
         bool gotTier1 = false, gotTier2 = false;
-        if (state.talentPoints + spent1 < MAX_TALENT_POINTS) {
-            state.talentPoints++;
+        if (hero.talentPoints + spent1 < MAX_TALENT_POINTS) {
+            hero.talentPoints++;
             gotTier1 = true;
         }
-        if (state.level >= TIER2_LEVEL_REQ) {
-            int spent2 = state.talents[TAL_3].level + state.talents[TAL_4].level + state.talents[TAL_5].level;
-            if (state.talentPoints2 + spent2 < MAX_TALENT_POINTS_T2) {
-                state.talentPoints2++;
+        if (hero.level >= TIER2_LEVEL_REQ) {
+            int spent2 = hero.talents[TAL_3].level + hero.talents[TAL_4].level + hero.talents[TAL_5].level;
+            if (hero.talentPoints2 + spent2 < MAX_TALENT_POINTS_T2) {
+                hero.talentPoints2++;
                 gotTier2 = true;
             }
         }
 
         wchar_t buf[64];
         if (gotTier1 && gotTier2)
-            swprintf(buf, 64, TW(L"[sync] 레벨 %d 달성 (특성 포인트 +1, 2차 +1)", L"[sync] Level %d reached (+1 talent pt, +1 tier-2)"), state.level);
+            swprintf(buf, 64, TW(L"[sync] 레벨 %d 달성 (특성 포인트 +1, 2차 +1)", L"[sync] Level %d reached (+1 talent pt, +1 tier-2)"), hero.level);
         else if (gotTier1)
-            swprintf(buf, 64, TW(L"[sync] 레벨 %d 달성 (특성 포인트 +1)", L"[sync] Level %d reached (+1 talent point)"), state.level);
+            swprintf(buf, 64, TW(L"[sync] 레벨 %d 달성 (특성 포인트 +1)", L"[sync] Level %d reached (+1 talent point)"), hero.level);
         else if (gotTier2)
-            swprintf(buf, 64, TW(L"[sync] 레벨 %d 달성 (2차 특성 포인트 +1)", L"[sync] Level %d reached (+1 tier-2 point)"), state.level);
+            swprintf(buf, 64, TW(L"[sync] 레벨 %d 달성 (2차 특성 포인트 +1)", L"[sync] Level %d reached (+1 tier-2 point)"), hero.level);
         else
-            swprintf(buf, 64, TW(L"[sync] 레벨 %d 달성", L"[sync] Level %d reached"), state.level);
-        state.lastEvent = buf;
+            swprintf(buf, 64, TW(L"[sync] 레벨 %d 달성", L"[sync] Level %d reached"), hero.level);
+        hero.lastEvent = buf;
     }
 
     // 아이템 드랍
     int dropChance = (int)(6.0f * dropMult);
     std::uniform_int_distribution<int> roll(1, 100);
     if (roll(g_rng) <= dropChance) {
-        Item dropped = MakeItem(RollDropGrade(state.dungeon.stage));
+        Item dropped = MakeItem(RollDropGrade(hero.dungeon.stage));
         wchar_t buf[80];
-        if ((int)state.inventory.items.size() < Inventory::MAX_ITEMS) {
-            state.inventory.items.push_back(dropped);
+        if ((int)hero.inventory.items.size() < Inventory::MAX_ITEMS) {
+            hero.inventory.items.push_back(dropped);
             swprintf(buf, 80, TW(L"[sync] %s 아이템 획득 (%s +%.0f%%)", L"[sync] Got %s item (%s +%.0f%%)"),
                      GradeNameW(dropped.grade),
                      StatNameW(dropped.stat),
                      dropped.bonus * 100.0f);
-            state.lastEvent = buf;
+            hero.lastEvent = buf;
             if (notify.empty() && dropped.grade >= Grade::Rare) notify = buf;
         } else {
             // 보관함이 가득 차서 드랍이 그대로 버려짐 — 놓치고 있다는 걸 알려줘야 함
             swprintf(buf, 80, TW(L"[sync] 보관함 가득 참 — %s 아이템을 놓쳤습니다!", L"[sync] Bag full — missed a %s item!"), GradeNameW(dropped.grade));
-            state.lastEvent = buf;
+            hero.lastEvent = buf;
             if (notify.empty()) notify = buf;
         }
     }
 
     return notify;
+}
+
+std::wstring GameTick(GameState& state) {
+    if (state.activeHero < 0) return L"";
+    return GameTick(state.Active(), state.legacyBonusPct);
 }
 
 // ---- 저장 / 불러오기 ---------------------------------------------------------
@@ -470,32 +505,49 @@ static std::string JoinInts(const int* vals, int count) {
     return s;
 }
 
+static void WriteHero(FILE* f, int idx, const Hero& hero) {
+    char key[32];
+    auto K = [&](const char* suffix) -> const char* {
+        snprintf(key, sizeof(key), "h%d_%s", idx, suffix);
+        return key;
+    };
+    WriteKV(f, K("everPlayed"), (long long)(hero.everPlayed ? 1 : 0));
+    if (!hero.everPlayed) return; // 빈 슬롯은 나머지 필드 생략
+    WriteKV(f, K("level"), (long long)hero.level);
+    WriteKV(f, K("xp"), hero.xp);
+    WriteKV(f, K("gold"), hero.gold);
+    WriteKV(f, K("stage"), (long long)hero.dungeon.stage);
+    WriteKV(f, K("prestige"), (long long)hero.prestigeCount);
+    WriteKV(f, K("talentPoints"), (long long)hero.talentPoints);
+    WriteKV(f, K("talentPoints2"), (long long)hero.talentPoints2);
+    WriteKV(f, K("deathCount"), hero.deathCount);
+
+    int upLevels[UP_COUNT];
+    for (int i = 0; i < UP_COUNT; i++) upLevels[i] = hero.upgrades[i].level;
+    WriteKV(f, K("upgrades"), JoinInts(upLevels, UP_COUNT));
+
+    int talLevels[TAL_COUNT];
+    for (int i = 0; i < TAL_COUNT; i++) talLevels[i] = hero.talents[i].level;
+    WriteKV(f, K("talents"), JoinInts(talLevels, TAL_COUNT));
+
+    WriteKV(f, K("inventory"), SerializeInventory(hero.inventory));
+}
+
 void SaveGame(const GameState& state) {
+    BackupSaveFile(); // 덮어쓰기 전에 이전 세이브를 .bak로 보존
     FILE* f = OpenSaveFileForWrite();
     if (!f) return;
 
-    WriteKV(f, "level", (long long)state.level);
-    WriteKV(f, "xp", state.xp);
-    WriteKV(f, "gold", state.gold);
-    WriteKV(f, "stage", (long long)state.dungeon.stage);
-    WriteKV(f, "class", (long long)state.playerClass);
-    WriteKV(f, "prestige", (long long)state.prestigeCount);
-    WriteKV(f, "talentPoints", (long long)state.talentPoints);
-    WriteKV(f, "talentPoints2", (long long)state.talentPoints2);
+    WriteKV(f, "activeHero", (long long)state.activeHero);
+    WriteKV(f, "legacyBonusPct", (long long)(state.legacyBonusPct * 1000.0f)); // 소수점 3자리 보존
+    WriteKV(f, "legacyPrestigeCount", (long long)state.legacyPrestigeCount);
     WriteKV(f, "totalRunSec", state.totalRunSec);
     WriteKV(f, "dashboardOpenSec", state.dashboardOpenSec);
-    WriteKV(f, "deathCount", state.deathCount);
     WriteKV(f, "language", (long long)(int)g_lang);
 
-    int upLevels[UP_COUNT];
-    for (int i = 0; i < UP_COUNT; i++) upLevels[i] = state.upgrades[i].level;
-    WriteKV(f, "upgrades", JoinInts(upLevels, UP_COUNT));
+    for (int i = 0; i < GameState::ROSTER_SIZE; i++)
+        WriteHero(f, i, state.heroes[i]);
 
-    int talLevels[TAL_COUNT];
-    for (int i = 0; i < TAL_COUNT; i++) talLevels[i] = state.talents[i].level;
-    WriteKV(f, "talents", JoinInts(talLevels, TAL_COUNT));
-
-    WriteKV(f, "inventory", SerializeInventory(state.inventory));
     fclose(f);
 }
 
@@ -532,43 +584,116 @@ static void KVIntList(const std::map<std::string, std::string>& kv, const char* 
         out[i] = atoi(tok.c_str());
 }
 
+static void ReadHero(const std::map<std::string, std::string>& kv, int idx, Hero& hero) {
+    char key[32];
+    auto K = [&](const char* suffix) -> const char* {
+        snprintf(key, sizeof(key), "h%d_%s", idx, suffix);
+        return key;
+    };
+    hero.everPlayed = KVLL(kv, K("everPlayed"), 0) != 0;
+    if (!hero.everPlayed) return;
+
+    hero.playerClass = (ClassType)(idx + 1); // 슬롯 인덱스가 곧 클래스를 결정
+    hero.level        = (int)KVLL(kv, K("level"), 1);
+    hero.xp           = KVLL(kv, K("xp"), 0);
+    hero.gold         = KVLL(kv, K("gold"), 0);
+    hero.dungeon.stage = (int)KVLL(kv, K("stage"), 1);
+    hero.prestigeCount = (int)KVLL(kv, K("prestige"), 0);
+    hero.talentPoints   = (int)KVLL(kv, K("talentPoints"), 0);
+    hero.talentPoints2  = (int)KVLL(kv, K("talentPoints2"), 0);
+    hero.deathCount      = KVLL(kv, K("deathCount"), 0);
+
+    InitUpgrades(hero);
+    InitTalentsForClass(hero);
+
+    int upLevels[UP_COUNT] = {};
+    for (int i = 0; i < UP_COUNT; i++) upLevels[i] = hero.upgrades[i].level;
+    KVIntList(kv, K("upgrades"), upLevels, UP_COUNT);
+    for (int i = 0; i < UP_COUNT; i++) hero.upgrades[i].level = upLevels[i];
+
+    int talLevels[TAL_COUNT] = {};
+    for (int i = 0; i < TAL_COUNT; i++) talLevels[i] = hero.talents[i].level;
+    KVIntList(kv, K("talents"), talLevels, TAL_COUNT);
+    for (int i = 0; i < TAL_COUNT; i++) hero.talents[i].level = talLevels[i];
+
+    auto invIt = kv.find(K("inventory"));
+    if (invIt != kv.end())
+        DeserializeInventory(invIt->second, hero.inventory);
+}
+
+// 로스터(다중 영웅) 도입 이전의 단일 캐릭터 세이브 포맷을 새 포맷으로 변환.
+// "activeHero" 키가 없는데 "class" 키가 있으면 옛 포맷으로 보고, 그 캐릭터를
+// 자기 클래스에 맞는 로스터 슬롯으로 그대로 옮긴다 — 포맷이 바뀌어도 진행
+// 상황은 절대 날리지 않는다 (라이브 서비스에서 업데이트한다고 캐릭터를
+// 지우지는 않으니까).
+static void MigrateOldSingleHeroSave(const std::map<std::string, std::string>& kv, GameState& state) {
+    long long cls = KVLL(kv, "class", CLASS_NONE);
+    if (cls < CLASS_WARRIOR || cls > CLASS_ROGUE) return; // 직업도 못 골랐던 세이브 — 옮길 게 없음
+
+    int idx = (int)cls - 1;
+    Hero& hero = state.heroes[idx];
+    hero.everPlayed   = true;
+    hero.playerClass  = (ClassType)cls;
+    hero.level         = (int)KVLL(kv, "level", 1);
+    hero.xp            = KVLL(kv, "xp", 0);
+    hero.gold          = KVLL(kv, "gold", 0);
+    hero.dungeon.stage = (int)KVLL(kv, "stage", 1);
+    int oldPrestige     = (int)KVLL(kv, "prestige", 0);
+    hero.prestigeCount  = oldPrestige;
+    hero.talentPoints   = (int)KVLL(kv, "talentPoints", 0);
+    hero.talentPoints2  = (int)KVLL(kv, "talentPoints2", 0);
+    hero.deathCount      = KVLL(kv, "deathCount", 0);
+
+    InitUpgrades(hero);
+    InitTalentsForClass(hero);
+
+    int upLevels[UP_COUNT] = {};
+    for (int i = 0; i < UP_COUNT; i++) upLevels[i] = hero.upgrades[i].level;
+    KVIntList(kv, "upgrades", upLevels, UP_COUNT);
+    for (int i = 0; i < UP_COUNT; i++) hero.upgrades[i].level = upLevels[i];
+
+    int talLevels[TAL_COUNT] = {};
+    for (int i = 0; i < TAL_COUNT; i++) talLevels[i] = hero.talents[i].level;
+    KVIntList(kv, "talents", talLevels, TAL_COUNT);
+    for (int i = 0; i < TAL_COUNT; i++) hero.talents[i].level = talLevels[i];
+
+    auto invIt = kv.find("inventory");
+    if (invIt != kv.end())
+        DeserializeInventory(invIt->second, hero.inventory);
+
+    state.activeHero = idx;
+    // 옛 프레스티지는 회당 +15% 보너스였으니, 그 가치를 계승 보너스로 그대로 환산해서 보존.
+    state.legacyBonusPct      = oldPrestige * 15.0f;
+    state.legacyPrestigeCount = oldPrestige;
+}
+
 void LoadGame(GameState& state) {
-    InitUpgrades(state);
     FILE* f = OpenSaveFileForRead();
     if (!f) return;
     std::map<std::string, std::string> kv = ReadKVFile(f);
     fclose(f);
-    if (kv.empty()) return; // 새 세이브 (또는 옛 포맷) — 기본 GameState로 시작
+    if (kv.empty()) return; // 새 세이브 — 기본 GameState로 시작
 
-    state.level         = (int)KVLL(kv, "level", 1);
-    state.xp             = KVLL(kv, "xp", 0);
-    state.gold           = KVLL(kv, "gold", 0);
-    state.dungeon.stage  = (int)KVLL(kv, "stage", 1);
-    state.prestigeCount  = (int)KVLL(kv, "prestige", 0);
-    state.talentPoints   = (int)KVLL(kv, "talentPoints", 0);
-    state.talentPoints2  = (int)KVLL(kv, "talentPoints2", 0);
     state.totalRunSec      = KVDouble(kv, "totalRunSec", 0.0);
     state.dashboardOpenSec = KVDouble(kv, "dashboardOpenSec", 0.0);
-    state.deathCount        = KVLL(kv, "deathCount", 0);
     state.language = (int)KVLL(kv, "language", 0);
     g_lang = (state.language == 1) ? Lang::EN : Lang::KO;
 
-    long long cls = KVLL(kv, "class", CLASS_NONE);
-    if (cls < CLASS_NONE || cls > CLASS_ROGUE) cls = CLASS_NONE; // 손상된 값 방어
-    state.playerClass = (ClassType)cls;
-    InitTalentsForClass(state);
+    bool isRosterFormat = kv.find("activeHero") != kv.end();
+    if (!isRosterFormat) {
+        MigrateOldSingleHeroSave(kv, state);
+        return;
+    }
 
-    int upLevels[UP_COUNT] = {};
-    for (int i = 0; i < UP_COUNT; i++) upLevels[i] = state.upgrades[i].level;
-    KVIntList(kv, "upgrades", upLevels, UP_COUNT);
-    for (int i = 0; i < UP_COUNT; i++) state.upgrades[i].level = upLevels[i];
+    state.activeHero          = (int)KVLL(kv, "activeHero", -1);
+    state.legacyBonusPct       = (float)KVLL(kv, "legacyBonusPct", 0) / 1000.0f;
+    state.legacyPrestigeCount = (int)KVLL(kv, "legacyPrestigeCount", 0);
 
-    int talLevels[TAL_COUNT] = {};
-    for (int i = 0; i < TAL_COUNT; i++) talLevels[i] = state.talents[i].level;
-    KVIntList(kv, "talents", talLevels, TAL_COUNT);
-    for (int i = 0; i < TAL_COUNT; i++) state.talents[i].level = talLevels[i];
+    for (int i = 0; i < GameState::ROSTER_SIZE; i++)
+        ReadHero(kv, i, state.heroes[i]);
 
-    auto invIt = kv.find("inventory");
-    if (invIt != kv.end())
-        DeserializeInventory(invIt->second, state.inventory);
+    if (state.activeHero < 0 || state.activeHero >= GameState::ROSTER_SIZE ||
+        !state.heroes[state.activeHero].everPlayed) {
+        state.activeHero = -1; // 손상되었거나 가리키는 영웅이 없으면 로스터 화면으로
+    }
 }

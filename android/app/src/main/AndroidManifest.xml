@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- 이벤트 알림 표시 (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 클라우드 동기화(Firebase REST) 통신 -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:label="Sync Agent"
@@ -17,6 +19,7 @@
             android:name="com.syncagent.MainActivity"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:configChanges="orientation|keyboardHidden|screenSize"
+            android:screenOrientation="portrait"
             android:exported="true">
             <!-- 로드할 .so 이름 — CMakeLists의 add_library 이름과 일치 -->
             <meta-data android:name="android.app.lib_name"
@@ -30,6 +33,10 @@
         <service
             android:name="com.syncagent.SyncService"
             android:foregroundServiceType="dataSync"
+            android:exported="false" />
+
+        <receiver
+            android:name="com.syncagent.NotificationTapReceiver"
             android:exported="false" />
 
         <receiver

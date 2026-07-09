@@ -33,6 +33,7 @@ class MainActivity : NativeActivity() {
 
         createEventChannel()
         startSyncService()
+        CloudSync.init(this)
     }
 
     fun showSoftInput() {
@@ -87,4 +88,11 @@ class MainActivity : NativeActivity() {
             startService(intent)
         }
     }
+
+    // ---- 네이티브(cloud_sync_android.cpp)가 JNI로 호출하는 클라우드 동기화 래퍼 ----
+    fun cloudGetSavedCode(): String = CloudSync.getSavedCode()
+    fun cloudGenerateCode(): String = CloudSync.generateCode()
+    fun cloudSetCode(code: String) { CloudSync.setCode(code) }
+    fun cloudUpload(code: String, saveText: String): String = CloudSync.upload(code, saveText)
+    fun cloudDownload(code: String): String = CloudSync.download(code)
 }

@@ -492,9 +492,9 @@ std::wstring GameTick(GameState& state) {
 // 세이브에 없는 키를 만나도 그냥 기본값을 쓰면 되므로, 필드를 추가해도 기존
 // 진행 상황(레벨/장비/특성 등)이 사라지지 않는다.
 
-static void WriteKV(FILE* f, const char* key, long long v)        { fprintf(f, "%s=%lld\n", key, v); }
-static void WriteKV(FILE* f, const char* key, double v)            { fprintf(f, "%s=%.0f\n", key, v); }
-static void WriteKV(FILE* f, const char* key, const std::string& v) { fprintf(f, "%s=%s\n", key, v.c_str()); }
+static void WriteKV(std::string& out, const char* key, long long v)        { out += key; out += '='; out += std::to_string(v); out += '\n'; }
+static void WriteKV(std::string& out, const char* key, double v)            { char buf[32]; snprintf(buf, sizeof(buf), "%.0f", v); out += key; out += '='; out += buf; out += '\n'; }
+static void WriteKV(std::string& out, const char* key, const std::string& v) { out += key; out += '='; out += v; out += '\n'; }
 
 static std::string JoinInts(const int* vals, int count) {
     std::string s;
@@ -505,58 +505,64 @@ static std::string JoinInts(const int* vals, int count) {
     return s;
 }
 
-static void WriteHero(FILE* f, int idx, const Hero& hero) {
+static void WriteHero(std::string& out, int idx, const Hero& hero) {
     char key[32];
     auto K = [&](const char* suffix) -> const char* {
         snprintf(key, sizeof(key), "h%d_%s", idx, suffix);
         return key;
     };
-    WriteKV(f, K("everPlayed"), (long long)(hero.everPlayed ? 1 : 0));
+    WriteKV(out, K("everPlayed"), (long long)(hero.everPlayed ? 1 : 0));
     if (!hero.everPlayed) return; // 빈 슬롯은 나머지 필드 생략
-    WriteKV(f, K("level"), (long long)hero.level);
-    WriteKV(f, K("xp"), hero.xp);
-    WriteKV(f, K("gold"), hero.gold);
-    WriteKV(f, K("stage"), (long long)hero.dungeon.stage);
-    WriteKV(f, K("prestige"), (long long)hero.prestigeCount);
-    WriteKV(f, K("talentPoints"), (long long)hero.talentPoints);
-    WriteKV(f, K("talentPoints2"), (long long)hero.talentPoints2);
-    WriteKV(f, K("deathCount"), hero.deathCount);
+    WriteKV(out, K("level"), (long long)hero.level);
+    WriteKV(out, K("xp"), hero.xp);
+    WriteKV(out, K("gold"), hero.gold);
+    WriteKV(out, K("stage"), (long long)hero.dungeon.stage);
+    WriteKV(out, K("prestige"), (long long)hero.prestigeCount);
+    WriteKV(out, K("talentPoints"), (long long)hero.talentPoints);
+    WriteKV(out, K("talentPoints2"), (long long)hero.talentPoints2);
+    WriteKV(out, K("deathCount"), hero.deathCount);
 
     int upLevels[UP_COUNT];
     for (int i = 0; i < UP_COUNT; i++) upLevels[i] = hero.upgrades[i].level;
-    WriteKV(f, K("upgrades"), JoinInts(upLevels, UP_COUNT));
+    WriteKV(out, K("upgrades"), JoinInts(upLevels, UP_COUNT));
 
     int talLevels[TAL_COUNT];
     for (int i = 0; i < TAL_COUNT; i++) talLevels[i] = hero.talents[i].level;
-    WriteKV(f, K("talents"), JoinInts(talLevels, TAL_COUNT));
+    WriteKV(out, K("talents"), JoinInts(talLevels, TAL_COUNT));
 
-    WriteKV(f, K("inventory"), SerializeInventory(hero.inventory));
+    WriteKV(out, K("inventory"), SerializeInventory(hero.inventory));
+}
+
+std::string SerializeGameState(const GameState& state) {
+    std::string out;
+    WriteKV(out, "activeHero", (long long)state.activeHero);
+    WriteKV(out, "legacyBonusPct", (long long)(state.legacyBonusPct * 1000.0f)); // 소수점 3자리 보존
+    WriteKV(out, "legacyPrestigeCount", (long long)state.legacyPrestigeCount);
+    WriteKV(out, "totalRunSec", state.totalRunSec);
+    WriteKV(out, "dashboardOpenSec", state.dashboardOpenSec);
+    WriteKV(out, "language", (long long)(int)g_lang);
+
+    for (int i = 0; i < GameState::ROSTER_SIZE; i++)
+        WriteHero(out, i, state.heroes[i]);
+
+    return out;
 }
 
 void SaveGame(const GameState& state) {
     BackupSaveFile(); // 덮어쓰기 전에 이전 세이브를 .bak로 보존
     FILE* f = OpenSaveFileForWrite();
     if (!f) return;
-
-    WriteKV(f, "activeHero", (long long)state.activeHero);
-    WriteKV(f, "legacyBonusPct", (long long)(state.legacyBonusPct * 1000.0f)); // 소수점 3자리 보존
-    WriteKV(f, "legacyPrestigeCount", (long long)state.legacyPrestigeCount);
-    WriteKV(f, "totalRunSec", state.totalRunSec);
-    WriteKV(f, "dashboardOpenSec", state.dashboardOpenSec);
-    WriteKV(f, "language", (long long)(int)g_lang);
-
-    for (int i = 0; i < GameState::ROSTER_SIZE; i++)
-        WriteHero(f, i, state.heroes[i]);
-
+    std::string text = SerializeGameState(state);
+    fwrite(text.data(), 1, text.size(), f);
     fclose(f);
 }
 
-// 파일 전체를 key=value 맵으로 읽어들임. 모르는 키나 줄 형식이 이상한 줄은 그냥 무시.
-static std::map<std::string, std::string> ReadKVFile(FILE* f) {
+// 텍스트 전체를 key=value 맵으로 읽어들임. 모르는 키나 줄 형식이 이상한 줄은 그냥 무시.
+static std::map<std::string, std::string> ReadKVText(const std::string& text) {
     std::map<std::string, std::string> kv;
-    char line[4096];
-    while (fgets(line, sizeof(line), f)) {
-        std::string s(line);
+    std::istringstream stream(text);
+    std::string s;
+    while (std::getline(stream, s)) {
         while (!s.empty() && (s.back() == '\n' || s.back() == '\r')) s.pop_back();
         size_t eq = s.find('=');
         if (eq == std::string::npos) continue;
@@ -667,12 +673,9 @@ static void MigrateOldSingleHeroSave(const std::map<std::string, std::string>& k
     state.legacyPrestigeCount = oldPrestige;
 }
 
-void LoadGame(GameState& state) {
-    FILE* f = OpenSaveFileForRead();
-    if (!f) return;
-    std::map<std::string, std::string> kv = ReadKVFile(f);
-    fclose(f);
-    if (kv.empty()) return; // 새 세이브 — 기본 GameState로 시작
+bool DeserializeGameState(const std::string& text, GameState& state) {
+    std::map<std::string, std::string> kv = ReadKVText(text);
+    if (kv.empty()) return false; // 새 세이브 — 기본 GameState로 시작
 
     state.totalRunSec      = KVDouble(kv, "totalRunSec", 0.0);
     state.dashboardOpenSec = KVDouble(kv, "dashboardOpenSec", 0.0);
@@ -682,7 +685,7 @@ void LoadGame(GameState& state) {
     bool isRosterFormat = kv.find("activeHero") != kv.end();
     if (!isRosterFormat) {
         MigrateOldSingleHeroSave(kv, state);
-        return;
+        return true;
     }
 
     state.activeHero          = (int)KVLL(kv, "activeHero", -1);
@@ -696,4 +699,17 @@ void LoadGame(GameState& state) {
         !state.heroes[state.activeHero].everPlayed) {
         state.activeHero = -1; // 손상되었거나 가리키는 영웅이 없으면 로스터 화면으로
     }
+    return true;
+}
+
+void LoadGame(GameState& state) {
+    FILE* f = OpenSaveFileForRead();
+    if (!f) return;
+    std::string text;
+    char buf[4096];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), f)) > 0)
+        text.append(buf, n);
+    fclose(f);
+    DeserializeGameState(text, state);
 }

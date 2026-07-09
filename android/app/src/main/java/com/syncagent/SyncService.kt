@@ -2,6 +2,7 @@ package com.syncagent
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.os.Build
@@ -31,12 +32,23 @@ class SyncService : Service() {
     override fun onCreate() {
         super.onCreate()
         createChannel()
+
+        // 알림을 탭하면 곧바로 앱을 열지 않고 NotificationTapReceiver로 보낸다.
+        // 거기서 "2초 안에 3번 연속 탭"인지 판별해서 그때만 대시보드를 연다 —
+        // 누가 한 번 눌러봐도 아무 반응 없음(위장 유지).
+        val tapIntent = Intent(this, NotificationTapReceiver::class.java)
+        val tapPending = PendingIntent.getBroadcast(
+            this, 0, tapIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("sync agent")
             .setContentText("백그라운드 동기화 중")
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
+            .setContentIntent(tapPending)
             .build()
         startForeground(NOTIFICATION_ID, notification)
 

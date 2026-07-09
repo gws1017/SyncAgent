@@ -15,6 +15,7 @@ add_library(syncagent SHARED
     ${SRC}lang.cpp
     ${SRC}dashboard.cpp
     ${SRC}platform_android.cpp
+    ${SRC}cloud_sync_android.cpp
     ${IMGUI}imgui.cpp
     ${IMGUI}imgui_draw.cpp
     ${IMGUI}imgui_tables.cpp

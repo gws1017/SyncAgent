@@ -1,6 +1,7 @@
 #include "dashboard.h"
 #include "equipment.h"
 #include "lang.h"
+#include "cloud_sync.h"
 #include "imgui.h"
 #ifdef _WIN32
 #include "imgui_impl_win32.h"
@@ -210,6 +211,75 @@ static void TabStatus(GameState& state) {
         state.language = langIdx;
         SaveGame(state);
     }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ---- 클라우드 동기화 (PC ↔ 모바일) --------------------------------------
+    // 계정 로그인 없이 "동기화 코드" 하나로 두 기기를 연결한다. 한쪽에서 코드를
+    // 만들고 다른 쪽에서 그 코드를 입력하면 됨. 네트워크 요청은 동기(blocking)라
+    // 버튼 누르는 순간 잠깐 멈칫할 수 있음 — 게임이 워낙 가벼워서 감내할 만한 수준.
+    static char codeInput[16] = {};
+    static std::string syncMsg;
+    static bool codeInputInit = false;
+    std::string savedCode = CloudGetSavedCode();
+    if (!codeInputInit) {
+        snprintf(codeInput, sizeof(codeInput), "%s", savedCode.c_str());
+        codeInputInit = true;
+    }
+
+    ImGui::TextDisabled("%s", T("클라우드 동기화 (PC / 모바일)", "Cloud sync (PC / mobile)"));
+    if (savedCode.empty()) {
+        ImGui::TextWrapped("%s", T("동기화 코드가 없습니다. 새로 만들거나, 다른 기기에서 만든 코드를 입력하세요.",
+                                    "No sync code yet. Generate one, or enter a code from another device."));
+    } else {
+        ImGui::Text("%s", T("현재 코드", "Current code")); ImGui::SameLine(140);
+        ImGui::TextColored({0.4f, 0.9f, 0.5f, 1.0f}, "%s", savedCode.c_str());
+    }
+
+    if (ImGui::Button(T("새 코드 생성", "Generate code"), {150, 0})) {
+        std::string c = CloudGenerateCode();
+        snprintf(codeInput, sizeof(codeInput), "%s", c.c_str());
+        syncMsg = T("새 코드가 생성됐습니다", "New code generated");
+    }
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(100);
+    ImGui::InputText("##codein", codeInput, sizeof(codeInput), ImGuiInputTextFlags_CharsDecimal);
+    ImGui::SameLine();
+    if (ImGui::Button(T("이 코드로 연결", "Link this code"), {130, 0})) {
+        CloudSetCode(codeInput);
+        syncMsg = T("코드가 연결됐습니다", "Code linked");
+    }
+
+    bool hasCode = codeInput[0] != '\0';
+    if (!hasCode) ImGui::BeginDisabled();
+    if (ImGui::Button(T("지금 업로드", "Upload now"), {150, 0})) {
+        CloudSyncResult r = CloudUpload(codeInput, SerializeGameState(state));
+        syncMsg = r.message;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(T("지금 다운로드", "Download now"), {150, 0})) {
+        std::string text;
+        CloudSyncResult r = CloudDownload(codeInput, text);
+        if (r.ok) {
+            GameState fresh{};
+            if (DeserializeGameState(text, fresh)) {
+                state = fresh;
+                g_lang = (state.language == 1) ? Lang::EN : Lang::KO;
+                SaveGame(state);
+                syncMsg = T("다운로드 완료 — 로컬 세이브에 반영됨", "Downloaded — applied to local save");
+            } else {
+                syncMsg = T("받은 데이터를 읽지 못했습니다", "Could not parse downloaded data");
+            }
+        } else {
+            syncMsg = r.message;
+        }
+    }
+    if (!hasCode) ImGui::EndDisabled();
+
+    if (!syncMsg.empty())
+        ImGui::TextDisabled("%s", syncMsg.c_str());
 }
 
 static void TabUpgrade(GameState& state) {

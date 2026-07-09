@@ -13,6 +13,7 @@ add_executable(syncagent WIN32
     src/tray.cpp
     src/dashboard.cpp
     src/platform_win.cpp
+    src/cloud_sync_win.cpp
     src/lang.cpp
     src/app.rc
     ${IMGUI_DIR}/imgui.cpp
@@ -36,6 +37,7 @@ target_link_libraries(syncagent PRIVATE
     d3d11
     dxgi
     d3dcompiler
+    winhttp
 )
 
 target_compile_definitions(syncagent PRIVATE UNICODE _UNICODE)

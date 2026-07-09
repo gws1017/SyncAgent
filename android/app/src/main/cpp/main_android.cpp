@@ -4,6 +4,7 @@
 #include "dashboard.h"
 #include "game.h"
 #include "platform.h"
+#include "cloud_sync.h"
 
 #include <android/log.h>
 #include <android/input.h>
@@ -309,6 +310,7 @@ static int32_t handleInputEvent(struct android_app* app, AInputEvent* event) {
 void android_main(struct android_app* app) {
     // 게임 초기화 — 창이 열리기 전에 세이브를 로드해야 하므로 여기서 먼저 처리
     PlatformInit(app->activity->internalDataPath);
+    CloudSyncAndroidInit(app);
     g_widgetPath = std::string(app->activity->internalDataPath) + "/widget.txt";
     LoadGame(g_state);
     g_lastTick = Clock::now();

@@ -2,13 +2,16 @@
 #include "equipment.h"
 #include "lang.h"
 #include "imgui.h"
+#ifdef _WIN32
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx11.h"
 #include <d3d11.h>
 #include <dxgi.h>
+#endif
 #include <cstdio>
 #include <algorithm>
 
+#ifdef _WIN32
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
     HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
@@ -22,12 +25,27 @@ static HWND g_hwnd    = nullptr;
 static bool g_visible = false;
 
 static constexpr int W = 460, H = 480;
+#endif
 
-// wstring → UTF-8 변환 헬퍼 (ImGui는 UTF-8 사용)
+// wstring → UTF-8 변환 (ImGui는 UTF-8 사용)
+// Windows: WideCharToMultiByte(UTF-16 LE)  /  Android: wchar_t=4바이트(UTF-32) 직접 인코딩
 static void ToUtf8(const std::wstring& src, char* dst, int dstSize) {
+#ifdef _WIN32
     WideCharToMultiByte(CP_UTF8, 0, src.c_str(), -1, dst, dstSize, nullptr, nullptr);
+#else
+    int j = 0;
+    for (wchar_t wc : src) {
+        unsigned cp = (unsigned)wc;
+        if      (cp < 0x80   && j+1 < dstSize) { dst[j++] = (char)cp; }
+        else if (cp < 0x800  && j+2 < dstSize) { dst[j++] = (char)(0xC0|(cp>>6));  dst[j++] = (char)(0x80|(cp&0x3F)); }
+        else if (cp < 0x10000&& j+3 < dstSize) { dst[j++] = (char)(0xE0|(cp>>12)); dst[j++] = (char)(0x80|((cp>>6)&0x3F)); dst[j++] = (char)(0x80|(cp&0x3F)); }
+        else if              (  j+4 < dstSize) { dst[j++] = (char)(0xF0|(cp>>18)); dst[j++] = (char)(0x80|((cp>>12)&0x3F)); dst[j++] = (char)(0x80|((cp>>6)&0x3F)); dst[j++] = (char)(0x80|(cp&0x3F)); }
+    }
+    if (j < dstSize) dst[j] = '\0';
+#endif
 }
 
+#ifdef _WIN32
 // ---- D3D11 helpers --------------------------------------------------------
 static bool CreateDeviceAndSwapChain() {
     DXGI_SWAP_CHAIN_DESC sd = {};
@@ -81,6 +99,7 @@ static LRESULT CALLBACK DashWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
+#endif // _WIN32
 
 // ---- 영웅 로스터 화면 -------------------------------------------------------
 // 클래스당 슬롯 1개. 처음이면 새로 시작, 이미 키운 적 있으면 이어서 진행.
@@ -571,7 +590,43 @@ static void TabDungeon(GameState& state) {
     }
 }
 
-// ---- 공개 API --------------------------------------------------------------
+// ---- 공개 API: 플랫폼 공통 ------------------------------------------------
+
+// 순수 ImGui UI — NewFrame 이후, Render 이전에 호출.
+// DisplaySize를 그대로 사용하므로 PC 고정 창 / 모바일 전체화면 둘 다 동작한다.
+void DashboardDrawUI(GameState& state) {
+    ImGuiIO& io = ImGui::GetIO();
+    ImGui::SetNextWindowPos({0, 0});
+    ImGui::SetNextWindowSize(io.DisplaySize);
+    ImGui::Begin("##main", nullptr,
+        ImGuiWindowFlags_NoTitleBar  |
+        ImGuiWindowFlags_NoResize    |
+        ImGuiWindowFlags_NoMove      |
+        ImGuiWindowFlags_NoSavedSettings);
+
+    auto TabScrollable = [](const char* id, void (*fn)(GameState&), GameState& s) {
+        ImGui::BeginChild(id, {0, 0}, false);
+        fn(s);
+        ImGui::EndChild();
+    };
+
+    if (state.activeHero < 0) {
+        ScreenHeroSelect(state);
+    } else if (ImGui::BeginTabBar("##tabs")) {
+        if (ImGui::BeginTabItem(T("현황", "Status")))    { TabScrollable("##s1", TabStatus,    state); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(T("업그레이드", "Upgrade"))) { TabScrollable("##s2", TabUpgrade,   state); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(T("특성", "Talents")))   { TabScrollable("##s3", TabTalent,    state); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(T("던전", "Dungeon")))   { TabScrollable("##s4", TabDungeon,   state); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(T("장비", "Gear")))      { TabScrollable("##s5", TabEquipment, state); ImGui::EndTabItem(); }
+        ImGui::EndTabBar();
+    }
+
+    ImGui::End();
+}
+
+// ---- 공개 API: Windows 전용 -----------------------------------------------
+#ifdef _WIN32
+
 bool DashboardInit(HINSTANCE hInst) {
     const wchar_t* cls = L"SyncAgentDash";
     WNDCLASSW wc = {};
@@ -650,32 +705,8 @@ void DashboardFrame(GameState& state) {
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-    ImGui::SetNextWindowPos({0, 0});
-    ImGui::SetNextWindowSize({(float)W, (float)H});
-    ImGui::Begin("##main", nullptr,
-        ImGuiWindowFlags_NoTitleBar  |
-        ImGuiWindowFlags_NoResize    |
-        ImGuiWindowFlags_NoMove      |
-        ImGuiWindowFlags_NoSavedSettings);
+    DashboardDrawUI(state);
 
-    auto TabScrollable = [](const char* id, void (*fn)(GameState&), GameState& s) {
-        ImGui::BeginChild(id, {0, 0}, false);
-        fn(s);
-        ImGui::EndChild();
-    };
-
-    if (state.activeHero < 0) {
-        ScreenHeroSelect(state);
-    } else if (ImGui::BeginTabBar("##tabs")) {
-        if (ImGui::BeginTabItem(T("현황", "Status")))    { TabScrollable("##s1", TabStatus,    state); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem(T("업그레이드", "Upgrade"))) { TabScrollable("##s2", TabUpgrade,   state); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem(T("특성", "Talents")))   { TabScrollable("##s3", TabTalent,    state); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem(T("던전", "Dungeon")))   { TabScrollable("##s4", TabDungeon,   state); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem(T("장비", "Gear")))      { TabScrollable("##s5", TabEquipment, state); ImGui::EndTabItem(); }
-        ImGui::EndTabBar();
-    }
-
-    ImGui::End();
     ImGui::Render();
 
     const float clear[4] = { 0.10f, 0.10f, 0.10f, 1.0f };
@@ -688,3 +719,5 @@ void DashboardFrame(GameState& state) {
 bool DashboardHandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     return ImGui_ImplWin32_WndProcHandler(hwnd, msg, wp, lp) != 0;
 }
+
+#endif // _WIN32

@@ -29,3 +29,17 @@ vendor/
 
 # Release packaging output
 dist/
+
+# Android / Gradle
+android/local.properties
+android/.gradle/
+android/.idea/
+android/**/build/
+android/**/.cxx/
+android/**/*.iml
+android/captures/
+*.keystore
+*.jks
+
+# 한글 폰트 (나눔고딕, 저작권 있는 배포용 폰트라 레포에는 안 올림 — 로컬에 직접 받아서 넣어야 함)
+android/app/src/main/assets/font.ttf

@@ -27,6 +27,7 @@ static float                g_densityScale = 1.0f; // 실제 픽셀 / 논리 dp 
 
 static GameState g_state;
 static AAssetManager* g_assetManager = nullptr;
+static std::string g_widgetPath; // 홈화면 위젯이 읽어갈 표시용 데이터 파일 경로
 
 using Clock = std::chrono::steady_clock;
 static Clock::time_point g_lastTick;
@@ -192,6 +193,18 @@ static void Shutdown() {
     LOGI("Shutdown complete");
 }
 
+// 홈화면 위젯용 표시 데이터 기록. 코틀린 쪽(SyncWidgetProvider)이 세이브 포맷이나
+// 게임 공식(xpForNext 등)을 다시 구현할 필요 없도록, 표시에 필요한 값만 뽑아서 써준다.
+static void WriteWidgetInfo() {
+    if (g_widgetPath.empty() || g_state.activeHero < 0) return;
+    const Hero& h = g_state.heroes[g_state.activeHero];
+    FILE* f = fopen(g_widgetPath.c_str(), "w");
+    if (!f) return;
+    fprintf(f, "level=%d\nstage=%d\nxpPct=%.3f\ngold=%lld\n",
+            h.level, h.dungeon.stage, h.xpProgress(), h.gold);
+    fclose(f);
+}
+
 // 5초마다 게임 틱 — 창(EGL)이 없어도, 즉 앱이 백그라운드로 내려가 있어도 호출된다.
 // (포그라운드 서비스가 프로세스를 살려두는 동안 android_main 루프 자체는 계속 돌기 때문에
 //  방치형 게임의 핵심인 "안 보고 있어도 자란다"가 성립한다.)
@@ -203,6 +216,7 @@ static void TickIfDue() {
     g_state.totalRunSec += TICK_SEC;
     std::wstring evt = GameTick(g_state);
     SaveGame(g_state);
+    WriteWidgetInfo();
     if (!evt.empty())
         PostEventNotification(evt);
 }
@@ -295,6 +309,7 @@ static int32_t handleInputEvent(struct android_app* app, AInputEvent* event) {
 void android_main(struct android_app* app) {
     // 게임 초기화 — 창이 열리기 전에 세이브를 로드해야 하므로 여기서 먼저 처리
     PlatformInit(app->activity->internalDataPath);
+    g_widgetPath = std::string(app->activity->internalDataPath) + "/widget.txt";
     LoadGame(g_state);
     g_lastTick = Clock::now();
 

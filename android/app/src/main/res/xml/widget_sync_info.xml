@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 잠금화면 위젯(keyguard)은 Android 5.0 이후 범용 API가 폐지되어 사실상 무효한
+     옵션이라 home_screen만 선언한다. (삼성 One UI 잠금화면 위젯은 자체 큐레이션 목록만
+     지원해서 서드파티 위젯이 노출될 방법이 없음 — 플랫폼 제약) -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="70dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget_sync"
+    android:previewLayout="@layout/widget_sync"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_description" />

@@ -1,2 +1,4 @@
-#define IDI_APPICON 101
-IDI_APPICON ICON "app.ico"
+#define IDI_APPICON      101
+#define IDI_APPICON_SYNC 102
+IDI_APPICON      ICON "app_fantasy.ico"
+IDI_APPICON_SYNC ICON "app.ico"

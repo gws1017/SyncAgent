@@ -541,6 +541,7 @@ std::string SerializeGameState(const GameState& state) {
     WriteKV(out, "totalRunSec", state.totalRunSec);
     WriteKV(out, "dashboardOpenSec", state.dashboardOpenSec);
     WriteKV(out, "language", (long long)(int)g_lang);
+    WriteKV(out, "disguiseMode", (long long)(state.disguiseMode ? 1 : 0));
 
     for (int i = 0; i < GameState::ROSTER_SIZE; i++)
         WriteHero(out, i, state.heroes[i]);
@@ -681,6 +682,7 @@ bool DeserializeGameState(const std::string& text, GameState& state) {
     state.dashboardOpenSec = KVDouble(kv, "dashboardOpenSec", 0.0);
     state.language = (int)KVLL(kv, "language", 0);
     g_lang = (state.language == 1) ? Lang::EN : Lang::KO;
+    state.disguiseMode = KVLL(kv, "disguiseMode", 0) != 0;
 
     bool isRosterFormat = kv.find("activeHero") != kv.end();
     if (!isRosterFormat) {

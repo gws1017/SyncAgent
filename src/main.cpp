@@ -12,15 +12,30 @@ static constexpr UINT IDI_APPICON = 101;
 
 static GameState g_state;
 
+// 트레이 툴팁도 위장 모드 상태를 그대로 반영 — 기본은 정직하게 "Text RPG",
+// 위장 모드를 켰을 때만 "sync agent"로 바뀐다.
 static void UpdateTrayTooltip() {
+    const wchar_t* brand = g_state.disguiseMode ? L"sync agent" : L"Text RPG";
     wchar_t tip[128];
     if (g_state.activeHero >= 0) {
         const Hero& h = g_state.Active();
-        swprintf_s(tip, L"sync agent  •  Lv.%d  •  %lld G", h.level, h.gold);
+        swprintf_s(tip, L"%s  •  Lv.%d  •  %lld G", brand, h.level, h.gold);
     } else {
-        swprintf_s(tip, L"sync agent");
+        swprintf_s(tip, L"%s", brand);
     }
     TraySetTooltip(tip);
+}
+
+// 프라이버시 모드가 바뀌었을 때만 트레이 아이콘을 교체 (매 프레임 LoadIconW를
+// 다시 부르지 않도록 변경 여부를 추적).
+static bool g_trayIconInit = false;
+static bool g_lastPrivacyMode = false;
+static void SyncTrayIconIfChanged() {
+    if (!g_trayIconInit || g_state.disguiseMode != g_lastPrivacyMode) {
+        TraySetIcon(g_state.disguiseMode);
+        g_lastPrivacyMode = g_state.disguiseMode;
+        g_trayIconInit = true;
+    }
 }
 
 static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -32,6 +47,7 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (!notify.empty())
                 TrayNotify(L"Background sync", notify);
             UpdateTrayTooltip();
+            SyncTrayIconIfChanged();
             SaveGame(g_state);
         }
         return 0;
@@ -91,6 +107,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
 
     TrayInit(msgHwnd, WM_TRAY, hInst);
     UpdateTrayTooltip();
+    SyncTrayIconIfChanged(); // 저장된 프라이버시 모드 상태를 시작하자마자 반영
     TrayNotify(L"Background sync", L"[sync] agent started");
 
     if (!DashboardInit(hInst)) return 1;
@@ -127,6 +144,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
             g_state.dashboardOpenSec += (double)frameInterval / (double)freq.QuadPart; // 노출 시간 누적
             lastFrame = now;
             DashboardFrame(g_state);
+            SyncTrayIconIfChanged(); // 대시보드에서 방금 토글했으면 즉시 반영
         } else {
             // 대시보드가 닫혀있을 때: GetMessage로 블로킹 (CPU 0%)
             if (!GetMessageW(&m, nullptr, 0, 0)) break;

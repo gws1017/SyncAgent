@@ -142,6 +142,10 @@ struct GameState {
 
     int language = 0; // 0=한국어, 1=영어. g_lang(lang.h)과 동기화해서 저장/불러오기함
 
+    // 위장 모드 — 켜면 대시보드가 가짜 동기화 로그 화면으로 바뀜 (실제 게임 UI는 숨김).
+    // 스토어에는 게임이라고 정직하게 올리되, 유저가 원할 때만 켜는 "보스키"류 기능.
+    bool disguiseMode = false;
+
     Hero&       Active()       { return heroes[activeHero]; }
     const Hero& Active() const { return heroes[activeHero]; }
 };

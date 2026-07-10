@@ -87,8 +87,8 @@ static std::string WideToUtf8(const std::wstring& src) {
 }
 
 // JNI: 게임 이벤트를 안드로이드 알림으로 표시 (PC의 트레이 토스트에 대응).
-// MainActivity.postEventNotification(String)을 호출한다.
-static void PostEventNotification(const std::wstring& text) {
+// MainActivity.postEventNotification(String, boolean)을 호출한다.
+static void PostEventNotification(const std::wstring& text, bool privacyMode) {
     if (!g_App || text.empty()) return;
     std::string utf8 = WideToUtf8(text);
 
@@ -96,11 +96,14 @@ static void PostEventNotification(const std::wstring& text) {
     JNIEnv* env = nullptr;
     if (vm->AttachCurrentThread(&env, nullptr) != JNI_OK) return;
     jclass cls = env->GetObjectClass(g_App->activity->clazz);
-    jmethodID mid = env->GetMethodID(cls, "postEventNotification", "(Ljava/lang/String;)V");
+    jmethodID mid = env->GetMethodID(cls, "postEventNotification", "(Ljava/lang/String;Z)V");
     if (mid) {
         jstring jtext = env->NewStringUTF(utf8.c_str());
-        env->CallVoidMethod(g_App->activity->clazz, mid, jtext);
+        env->CallVoidMethod(g_App->activity->clazz, mid, jtext, (jboolean)privacyMode);
         env->DeleteLocalRef(jtext);
+        // Kotlin 쪽에서 예외가 안 잡히고 올라오면 JNIEnv에 예외가 걸린 채로 남아서
+        // 스레드가 살아있는 동안 이후 JNI 호출이 전부 조용히 실패한다 — 방어적으로 비움.
+        if (env->ExceptionCheck()) env->ExceptionClear();
     }
     vm->DetachCurrentThread();
 }
@@ -194,6 +197,33 @@ static void Shutdown() {
     LOGI("Shutdown complete");
 }
 
+// JNI: 최근 앱 목록(TaskDescription)과 상시 알림의 이름/아이콘을 프라이버시 모드에
+// 맞춰 갱신한다. MainActivity.updatePrivacyPresentation(boolean)을 호출한다.
+static void UpdatePrivacyPresentation(bool privacyMode) {
+    if (!g_App) return;
+    JavaVM* vm = g_App->activity->vm;
+    JNIEnv* env = nullptr;
+    if (vm->AttachCurrentThread(&env, nullptr) != JNI_OK) return;
+    jclass cls = env->GetObjectClass(g_App->activity->clazz);
+    jmethodID mid = env->GetMethodID(cls, "updatePrivacyPresentation", "(Z)V");
+    if (mid) {
+        env->CallVoidMethod(g_App->activity->clazz, mid, (jboolean)privacyMode);
+        if (env->ExceptionCheck()) env->ExceptionClear();
+    }
+    vm->DetachCurrentThread();
+}
+
+// 값이 바뀌었을 때만 JNI를 넘어가도록 변경 감지 (매 프레임 호출해도 저렴하게).
+static bool g_privacyInit = false;
+static bool g_lastPrivacyMode = false;
+static void SyncPrivacyPresentationIfChanged() {
+    if (!g_privacyInit || g_state.disguiseMode != g_lastPrivacyMode) {
+        UpdatePrivacyPresentation(g_state.disguiseMode);
+        g_lastPrivacyMode = g_state.disguiseMode;
+        g_privacyInit = true;
+    }
+}
+
 // 홈화면 위젯용 표시 데이터 기록. 코틀린 쪽(SyncWidgetProvider)이 세이브 포맷이나
 // 게임 공식(xpForNext 등)을 다시 구현할 필요 없도록, 표시에 필요한 값만 뽑아서 써준다.
 static void WriteWidgetInfo() {
@@ -218,8 +248,9 @@ static void TickIfDue() {
     std::wstring evt = GameTick(g_state);
     SaveGame(g_state);
     WriteWidgetInfo();
+    SyncPrivacyPresentationIfChanged();
     if (!evt.empty())
-        PostEventNotification(evt);
+        PostEventNotification(evt, g_state.disguiseMode);
 }
 
 static void MainLoopStep() {
@@ -252,6 +283,7 @@ static void MainLoopStep() {
     ImGui::NewFrame();
 
     DashboardDrawUI(g_state);
+    SyncPrivacyPresentationIfChanged(); // 방금 대시보드에서 토글했으면 즉시 반영
 
     ImGui::Render();
     glClearColor(0.10f, 0.10f, 0.10f, 1.0f);

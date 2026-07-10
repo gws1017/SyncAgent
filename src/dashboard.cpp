@@ -160,7 +160,7 @@ static void TabStatus(GameState& state) {
     Hero& hero = state.Active();
     ImGui::Spacing();
 
-    ImGui::TextDisabled("IDLE AGENT  v0.1");
+    ImGui::TextDisabled("TEXT RPG  v0.1");
     ImGui::Separator();
     ImGui::Spacing();
 
@@ -209,6 +209,23 @@ static void TabStatus(GameState& state) {
     if (ImGui::Combo("##lang", &langIdx, langItems, 2)) {
         g_lang = (langIdx == 0) ? Lang::KO : Lang::EN;
         state.language = langIdx;
+        SaveGame(state);
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ---- 프라이버시 모드 ----------------------------------------------------
+    // 화면 내용(탭/스탯 등)은 그대로 두고, 창 제목/트레이 표시 이름만
+    // "Text RPG" ↔ "sync agent"로 바꾼다. 기본은 정직한 이름이 뜨고, 이 토글을
+    // 켰을 때만 sync agent로 바뀜 (스토어 리스팅과 실제 앱 정체성 일치를 위해).
+    ImGui::TextDisabled("%s", T("프라이버시 모드", "Privacy mode"));
+    ImGui::TextWrapped("%s", T("창 제목과 트레이 표시 이름을 sync agent로 바꿉니다 (화면 내용은 그대로).",
+                                "Renames the window title and tray icon to sync agent (screen content stays the same)."));
+    bool disguise = state.disguiseMode;
+    if (ImGui::Checkbox(T("프라이버시 모드 켜기", "Enable privacy mode"), &disguise)) {
+        state.disguiseMode = disguise;
         SaveGame(state);
     }
 
@@ -707,7 +724,7 @@ bool DashboardInit(HINSTANCE hInst) {
     RegisterClassW(&wc);
 
     g_hwnd = CreateWindowW(
-        cls, L"sync agent — dashboard",
+        cls, L"Text RPG — Dashboard", // 기본은 정직한 게임 제목. 위장 모드 켜면 DashboardFrame에서 바꿈.
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
         CW_USEDEFAULT, CW_USEDEFAULT, W, H,
         nullptr, nullptr, hInst, nullptr);
@@ -770,6 +787,16 @@ bool DashboardIsVisible() { return g_visible; }
 
 void DashboardFrame(GameState& state) {
     if (!g_visible) return;
+
+    // 창 제목은 위장 모드 상태를 그대로 반영 — 기본은 정직하게 "Text RPG",
+    // 위장 모드 켜면 "sync agent"로 바뀜. 상태가 바뀔 때만 SetWindowTextW 호출.
+    static bool titleInit = false;
+    static bool lastDisguise = false;
+    if (!titleInit || state.disguiseMode != lastDisguise) {
+        SetWindowTextW(g_hwnd, state.disguiseMode ? L"sync agent — dashboard" : L"Text RPG — Dashboard");
+        lastDisguise = state.disguiseMode;
+        titleInit = true;
+    }
 
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();

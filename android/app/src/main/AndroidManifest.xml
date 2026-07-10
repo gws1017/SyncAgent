@@ -9,8 +9,15 @@
     <!-- 클라우드 동기화(Firebase REST) 통신 -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- 런처 아이콘 및 OS가 강제로 보여주는 알림/최근앱 "이 앱이 진짜 누구냐" 배지는
+         런타임에 못 바꾸는 고정값이라(실측 확인) 프라이버시 모드로도 안 바뀐다. 그래서
+         게임인지 티 안 나는 추상 젬 아이콘(ic_badge)을 써서, 프라이버시 모드 켰을 때도
+         곁눈질로 봤을 때 티가 안 나게 한다. 이름(label)은 정직하게 "Text RPG" 고정.
+         최근 앱 목록(TaskDescription)과 알림 텍스트/작은 아이콘은 MainActivity에서
+         프라이버시 모드에 맞춰 런타임에 동적으로 바뀐다. -->
     <application
-        android:label="Sync Agent"
+        android:label="Text RPG"
+        android:icon="@drawable/ic_badge"
         android:allowBackup="false"
         android:fullBackupContent="false"
         android:hasCode="true">

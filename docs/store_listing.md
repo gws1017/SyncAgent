@@ -41,7 +41,9 @@ Text RPG - 방치형 텍스트 RPG
 
 ## 개인정보처리방침 URL
 https://gws1017.github.io/SyncAgent/privacy.html
-(GitHub Pages 활성화 후 사용 가능 — 아래 안내 참고)
+
+## 데이터 삭제 요청 URL
+https://gws1017.github.io/SyncAgent/data-deletion.html
 
 ---
 

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Text RPG - 데이터 삭제 요청</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
+         max-width: 720px; margin: 40px auto; padding: 0 20px; line-height: 1.7; color: #222; }
+  h1 { font-size: 1.6em; }
+  h2 { font-size: 1.2em; margin-top: 2em; border-bottom: 1px solid #ddd; padding-bottom: 0.3em; }
+  .updated { color: #777; font-size: 0.9em; }
+  .steps { background: #f7f7f8; border: 1px solid #e5e5e5; padding: 1em 1.2em; border-radius: 6px; }
+  .steps ol { margin: 0.5em 0 0; padding-left: 1.3em; }
+  section { margin-bottom: 1.5em; }
+  a { color: #1a5fb4; }
+</style>
+</head>
+<body>
+
+<h1>Text RPG — 데이터 삭제 요청</h1>
+<p class="updated">앱 이름: Text RPG &nbsp;|&nbsp; 최종 수정일: 2026-07-13</p>
+
+<section>
+<p>
+이 페이지는 Google Play에 등록된 앱 <strong>Text RPG</strong>의
+클라우드 저장 데이터 삭제를 요청하는 방법을 안내합니다.
+</p>
+</section>
+
+<h2>삭제 요청 방법</h2>
+<section class="steps">
+<ol>
+  <li>사용 중인 <strong>동기화 코드</strong>를 확인합니다. (앱 현황 탭 → 클라우드 동기화)</li>
+  <li>
+    GitHub 저장소에 Issue를 엽니다:<br>
+    <a href="https://github.com/gws1017/SyncAgent/issues/new?title=Data%20deletion%20request">
+      github.com/gws1017/SyncAgent — 새 Issue 만들기
+    </a>
+  </li>
+  <li>제목에 <code>Data deletion request</code> 또는 <code>데이터 삭제 요청</code>을 적습니다.</li>
+  <li>본문에 <strong>삭제할 동기화 코드</strong>를 적어 제출합니다. (다른 개인정보는 적지 않아도 됩니다.)</li>
+  <li>요청 확인 후 <strong>30일 이내</strong>에 해당 클라우드 데이터를 삭제합니다.</li>
+</ol>
+</section>
+
+<h2>삭제되는 데이터</h2>
+<section>
+<ul>
+  <li>Firebase에 저장된 <strong>게임 진행 세이브</strong> (레벨, 골드, 장비, 업그레이드 등)</li>
+  <li>해당 동기화 코드에 연결된 <strong>클라우드 동기화 기록</strong></li>
+  <li>동기화에 사용된 <strong>Firebase 익명 인증 ID</strong> (해당 코드 경로에 묶인 범위)</li>
+</ul>
+</section>
+
+<h2>삭제되지 않거나 기기에 남는 데이터</h2>
+<section>
+<ul>
+  <li>
+    <strong>기기 로컬 세이브</strong> — 폰/PC에만 있는 진행 데이터는 서버에 없으므로
+    이 요청으로 지워지지 않습니다. 앱 삭제 또는 앱 데이터 삭제로 제거할 수 있습니다.
+  </li>
+  <li>
+    광고 네트워크(향후 AdMob 등)가 기기에 저장하는 광고 ID·측정 데이터는
+    해당 사업자 정책에 따르며, 기기 설정에서 광고 개인화를 제한할 수 있습니다.
+  </li>
+</ul>
+</section>
+
+<h2>보관 기간</h2>
+<section>
+<ul>
+  <li>클라우드 세이브: 삭제 요청이 없으면 동기화 코드가 유지되는 동안 보관됩니다.</li>
+  <li>삭제 요청 접수 후: 보통 <strong>30일 이내</strong> 삭제하며, 백업/로그에 남은 경우
+      최대 <strong>90일</strong> 이내에 완전 제거를 목표로 합니다.</li>
+</ul>
+</section>
+
+<section>
+<p>
+관련 문서:
+<a href="privacy.html">개인정보처리방침</a>
+</p>
+</section>
+
+</body>
+</html>

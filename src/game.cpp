@@ -371,6 +371,7 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
         totalDmg = baseAtk;
         break;
     }
+    long long perHitDmg = totalDmg; // 공속 배수 적용 전, "한 타" 분량 (기습 계산용)
     int numAttacks = 1 + (int)atkSpeedBonus; // 정수 부분 = 확정 추가 공격
     float atkSpeedFrac = atkSpeedBonus - (float)(int)atkSpeedBonus;
     if (atkSpeedFrac > 0.0f) {
@@ -379,10 +380,13 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
     }
     totalDmg *= numAttacks;
 
-    // 기습(도적) — 포인트당 추가 공격 확률
+    // 기습(도적) — 포인트당 추가 공격 확률. 예전엔 이미 공속 배수가 적용된
+    // totalDmg를 통째로 ×2 해서 "공속으로 늘어난 타수"와 "기습 확률"이 곱연산으로
+    // 겹쳐 도적만 딜이 눈덩이처럼 불어났음. 이제는 "한 타 분량"만 추가로 더해서
+    // (공속 배수와 무관하게) 다른 클래스의 확정형 보너스들과 스케일이 비슷하게 감.
     if (tal.extraAtkChance > 0.0f) {
         std::uniform_real_distribution<float> procRoll(0.0f, 100.0f);
-        if (procRoll(g_rng) <= tal.extraAtkChance) totalDmg *= 2;
+        if (procRoll(g_rng) <= tal.extraAtkChance) totalDmg += perHitDmg;
     }
 
     long long enemyDef = EnemyDefForStage(hero.dungeon.stage);

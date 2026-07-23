@@ -461,7 +461,10 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
         wchar_t buf[80];
         if ((int)hero.inventory.items.size() < Inventory::MAX_ITEMS) {
             hero.inventory.items.push_back(dropped);
-            swprintf(buf, 80, TW(L"[sync] %s 아이템 획득 (%s +%.0f%%)", L"[sync] Got %s item (%s +%.0f%%)"),
+            // %ls를 씀 — 와이드 printf(swprintf)에서 %s는 플랫폼마다 동작이 갈림
+            // (MSVC는 wchar_t*로 받아주지만 안드로이드 Bionic libc는 표준대로
+            // char*를 기대해서 깨짐). %ls는 모든 플랫폼에서 wchar_t*로 확실히 처리됨.
+            swprintf(buf, 80, TW(L"[sync] %ls 아이템 획득 (%ls +%.0f%%)", L"[sync] Got %ls item (%ls +%.0f%%)"),
                      GradeNameW(dropped.grade),
                      StatNameW(dropped.stat),
                      dropped.bonus * 100.0f);
@@ -469,7 +472,7 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
             if (notify.empty() && dropped.grade >= Grade::Rare) notify = buf;
         } else {
             // 보관함이 가득 차서 드랍이 그대로 버려짐 — 놓치고 있다는 걸 알려줘야 함
-            swprintf(buf, 80, TW(L"[sync] 보관함 가득 참 — %s 아이템을 놓쳤습니다!", L"[sync] Bag full — missed a %s item!"), GradeNameW(dropped.grade));
+            swprintf(buf, 80, TW(L"[sync] 보관함 가득 참 — %ls 아이템을 놓쳤습니다!", L"[sync] Bag full — missed a %ls item!"), GradeNameW(dropped.grade));
             hero.lastEvent = buf;
             if (notify.empty()) notify = buf;
         }
@@ -542,6 +545,7 @@ std::string SerializeGameState(const GameState& state) {
     WriteKV(out, "dashboardOpenSec", state.dashboardOpenSec);
     WriteKV(out, "language", (long long)(int)g_lang);
     WriteKV(out, "disguiseMode", (long long)(state.disguiseMode ? 1 : 0));
+    WriteKV(out, "backgroundEnabled", (long long)(state.backgroundEnabled ? 1 : 0));
 
     for (int i = 0; i < GameState::ROSTER_SIZE; i++)
         WriteHero(out, i, state.heroes[i]);
@@ -683,6 +687,7 @@ bool DeserializeGameState(const std::string& text, GameState& state) {
     state.language = (int)KVLL(kv, "language", 0);
     g_lang = (state.language == 1) ? Lang::EN : Lang::KO;
     state.disguiseMode = KVLL(kv, "disguiseMode", 0) != 0;
+    state.backgroundEnabled = KVLL(kv, "backgroundEnabled", 1) != 0;
 
     bool isRosterFormat = kv.find("activeHero") != kv.end();
     if (!isRosterFormat) {

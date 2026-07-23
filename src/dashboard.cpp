@@ -160,7 +160,7 @@ static void TabStatus(GameState& state) {
     Hero& hero = state.Active();
     ImGui::Spacing();
 
-    ImGui::TextDisabled("TEXT RPG  v0.1");
+    ImGui::TextDisabled("TEXT RPG  v1.0.1");
     ImGui::Separator();
     ImGui::Spacing();
 
@@ -197,9 +197,10 @@ static void TabStatus(GameState& state) {
     ImGui::Text(T("%s  (들킬 뻔한 시간)", "%s  (time you risked getting caught)"), dashBuf);
     ImGui::Text("%s", T("사망 횟수", "Deaths"));   ImGui::SameLine(140);
     ImGui::Text(T("%lld 회  (이 영웅 기준)", "%lld  (this hero)"), hero.deathCount);
+}
 
-    ImGui::Spacing();
-    ImGui::Separator();
+// ---- 설정 탭 ----------------------------------------------------------------
+static void TabOptions(GameState& state) {
     ImGui::Spacing();
 
     ImGui::TextDisabled("%s", T("언어 / Language", "Language / 언어"));
@@ -209,6 +210,25 @@ static void TabStatus(GameState& state) {
     if (ImGui::Combo("##lang", &langIdx, langItems, 2)) {
         g_lang = (langIdx == 0) ? Lang::KO : Lang::EN;
         state.language = langIdx;
+        SaveGame(state);
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ---- 백그라운드 실행 -----------------------------------------------------
+    // 꺼두면 안드로이드는 포그라운드 서비스(상시 알림)를 내려서 앱을 최소화했을 때
+    // 성장이 멈추고, PC는 대시보드가 닫혀 있는 동안 틱을 건너뛴다. 강제종료 없이도
+    // 유저가 직접 껐다 켰다 할 수 있게 하기 위한 옵션.
+    ImGui::TextDisabled("%s", T("백그라운드 실행", "Background running"));
+    ImGui::TextWrapped("%s", T("꺼두면 앱을 보고 있지 않을 때(최소화/백그라운드) 성장이 멈춥니다."
+                                " 안드로이드에서는 상시 알림도 함께 사라집니다.",
+                                "When off, progress pauses while the app isn't in the foreground."
+                                " On Android, the persistent notification also disappears."));
+    bool bgEnabled = state.backgroundEnabled;
+    if (ImGui::Checkbox(T("백그라운드에서도 계속 실행", "Keep running in background"), &bgEnabled)) {
+        state.backgroundEnabled = bgEnabled;
         SaveGame(state);
     }
 
@@ -679,12 +699,26 @@ static void TabDungeon(GameState& state) {
 
 // ---- 공개 API: 플랫폼 공통 ------------------------------------------------
 
+static float g_topInsetDp  = 0.0f;
+static float g_sideMarginDp = 0.0f;
+
+void DashboardSetTopInset(float insetDp) {
+    g_topInsetDp = insetDp;
+}
+
+void DashboardSetSideMargin(float marginDp) {
+    g_sideMarginDp = marginDp;
+}
+
 // 순수 ImGui UI — NewFrame 이후, Render 이전에 호출.
 // DisplaySize를 그대로 사용하므로 PC 고정 창 / 모바일 전체화면 둘 다 동작한다.
+// 안드로이드에서는 카메라 펀치홀/노치를 피해서 g_topInsetDp만큼 아래에서 시작하고,
+// g_sideMarginDp만큼 좌우 여백을 둔다 (main_android.cpp가 논리 캔버스를 그만큼
+// 넓게 잡아둬서, 기존 460dp 폭 레이아웃은 안 줄어들고 그대로 가운데 배치됨).
 void DashboardDrawUI(GameState& state) {
     ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos({0, 0});
-    ImGui::SetNextWindowSize(io.DisplaySize);
+    ImGui::SetNextWindowPos({g_sideMarginDp, g_topInsetDp});
+    ImGui::SetNextWindowSize({io.DisplaySize.x - g_sideMarginDp * 2.0f, io.DisplaySize.y - g_topInsetDp});
     ImGui::Begin("##main", nullptr,
         ImGuiWindowFlags_NoTitleBar  |
         ImGuiWindowFlags_NoResize    |
@@ -705,6 +739,7 @@ void DashboardDrawUI(GameState& state) {
         if (ImGui::BeginTabItem(T("특성", "Talents")))   { TabScrollable("##s3", TabTalent,    state); ImGui::EndTabItem(); }
         if (ImGui::BeginTabItem(T("던전", "Dungeon")))   { TabScrollable("##s4", TabDungeon,   state); ImGui::EndTabItem(); }
         if (ImGui::BeginTabItem(T("장비", "Gear")))      { TabScrollable("##s5", TabEquipment, state); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(T("설정", "Options")))   { TabScrollable("##s6", TabOptions,   state); ImGui::EndTabItem(); }
         ImGui::EndTabBar();
     }
 
@@ -714,12 +749,19 @@ void DashboardDrawUI(GameState& state) {
 // ---- 공개 API: Windows 전용 -----------------------------------------------
 #ifdef _WIN32
 
+static constexpr UINT IDI_APPICON      = 101; // 기본(정직) — 판타지 젬 아이콘
+static constexpr UINT IDI_APPICON_SYNC = 102; // 프라이버시 모드 — sync 아이콘
+
+static HINSTANCE g_hInst = nullptr;
+
 bool DashboardInit(HINSTANCE hInst) {
+    g_hInst = hInst;
     const wchar_t* cls = L"SyncAgentDash";
     WNDCLASSW wc = {};
     wc.lpfnWndProc   = DashWndProc;
     wc.hInstance     = hInst;
     wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
+    wc.hIcon         = LoadIconW(hInst, MAKEINTRESOURCEW(IDI_APPICON));
     wc.lpszClassName = cls;
     RegisterClassW(&wc);
 
@@ -788,12 +830,19 @@ bool DashboardIsVisible() { return g_visible; }
 void DashboardFrame(GameState& state) {
     if (!g_visible) return;
 
-    // 창 제목은 위장 모드 상태를 그대로 반영 — 기본은 정직하게 "Text RPG",
-    // 위장 모드 켜면 "sync agent"로 바뀜. 상태가 바뀔 때만 SetWindowTextW 호출.
+    // 창 제목/작업표시줄 아이콘은 위장 모드 상태를 그대로 반영 — 기본은 정직하게
+    // "Text RPG" + 젬 아이콘, 위장 모드 켜면 "sync agent" + sync 아이콘으로 바뀜.
+    // 창 아이콘은 wc.hIcon(생성 시 고정값)과 별개로 WM_SETICON으로 런타임에 덮어써야
+    // 작업표시줄에도 반영됨 (트레이 아이콘과 같은 이유로 처음엔 안 바뀌었었음).
     static bool titleInit = false;
     static bool lastDisguise = false;
     if (!titleInit || state.disguiseMode != lastDisguise) {
         SetWindowTextW(g_hwnd, state.disguiseMode ? L"sync agent — dashboard" : L"Text RPG — Dashboard");
+        HICON icon = LoadIconW(g_hInst, MAKEINTRESOURCEW(state.disguiseMode ? IDI_APPICON_SYNC : IDI_APPICON));
+        if (icon) {
+            SendMessageW(g_hwnd, WM_SETICON, ICON_BIG, (LPARAM)icon);
+            SendMessageW(g_hwnd, WM_SETICON, ICON_SMALL, (LPARAM)icon);
+        }
         lastDisguise = state.disguiseMode;
         titleInit = true;
     }

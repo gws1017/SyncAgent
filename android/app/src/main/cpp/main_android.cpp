@@ -91,6 +91,8 @@ static std::string WideToUtf8(const std::wstring& src) {
 static void PostEventNotification(const std::wstring& text, bool privacyMode) {
     if (!g_App || text.empty()) return;
     std::string utf8 = WideToUtf8(text);
+    LOGI("PostEventNotification: wlen=%d utf8len=%d utf8='%s'",
+         (int)text.size(), (int)utf8.size(), utf8.c_str());
 
     JavaVM* vm = g_App->activity->vm;
     JNIEnv* env = nullptr;
@@ -151,19 +153,27 @@ static void Init(struct android_app* app) {
     s.Colors[ImGuiCol_Tab]           = ImVec4(0.15f, 0.15f, 0.15f, 1.00f);
     s.Colors[ImGuiCol_TabSelected]   = ImVec4(0.24f, 0.24f, 0.24f, 1.00f);
 
+    // 터치로 누르기엔 PC 기준 패딩/간격이 너무 빡빡해서 모바일에서만 살짝 키움.
+    // 버튼 폭(320, 90 등)은 코드에 고정값으로 박혀있어 안 바뀌지만, 높이는
+    // FramePadding.y가 커지면 같이 커져서(고정폭 버튼도 높이는 auto라) 탭하기
+    // 편해짐 — 가로 폭을 안 건드리니 기존에 잡아둔 잘림 방지 여유폭도 안 깨짐.
+    s.FramePadding  = ImVec2(10.0f, 8.0f);
+    s.ItemSpacing.y = 10.0f;
+
     // 화면 배율 계산은 MainLoopStep에서 매 프레임 다시 함 (아래 kDesignWidth 참고).
     // 여기서는 초기값만 넣어둔다.
     g_densityScale = 1.0f;
 
     // 한국어 폰트: assets/font.ttf 를 넣어두면 자동 로드.
     // (예: NanumGothic.ttf, 없으면 기본 폰트 → 한글 깨짐)
-    // PC와 동일하게 15pt로 로드 — 선명도는 DisplayFramebufferScale이 알아서 처리한다.
+    // PC(15pt)보다 살짝 키워서 모바일에서 더 읽기/누르기 편하게 함.
+    // 선명도는 DisplayFramebufferScale이 알아서 처리한다.
     void* fontData = nullptr;
     int   fontSize = LoadAsset("font.ttf", &fontData);
     if (fontSize > 0) {
         ImFontConfig fc;
         fc.OversampleH = 1; fc.OversampleV = 1; fc.PixelSnapH = true;
-        io.Fonts->AddFontFromMemoryTTF(fontData, fontSize, 15.0f,
+        io.Fonts->AddFontFromMemoryTTF(fontData, fontSize, 17.0f,
                                        &fc, io.Fonts->GetGlyphRangesKorean());
     } else {
         LOGI("font.ttf not found in assets — Korean text will show as boxes");
@@ -213,6 +223,40 @@ static void UpdatePrivacyPresentation(bool privacyMode) {
     vm->DetachCurrentThread();
 }
 
+// JNI: 카메라 펀치홀/노치의 상단 안전 영역 높이(px)를 가져온다.
+// MainActivity.getSafeInsetTopPx()를 호출한다.
+static int GetSafeInsetTopPx() {
+    if (!g_App) return 0;
+    JavaVM* vm = g_App->activity->vm;
+    JNIEnv* env = nullptr;
+    if (vm->AttachCurrentThread(&env, nullptr) != JNI_OK) return 0;
+    jclass cls = env->GetObjectClass(g_App->activity->clazz);
+    jmethodID mid = env->GetMethodID(cls, "getSafeInsetTopPx", "()I");
+    int px = 0;
+    if (mid) {
+        px = (int)env->CallIntMethod(g_App->activity->clazz, mid);
+        if (env->ExceptionCheck()) { env->ExceptionClear(); px = 0; }
+    }
+    vm->DetachCurrentThread();
+    return px;
+}
+
+// 안전 영역은 회전 등으로만 바뀌니 매 프레임 JNI를 타지 않고 1초에 한 번 정도만 확인.
+static void SyncTopInsetIfChanged() {
+    static int lastPx = -1;
+    static Clock::time_point lastCheck;
+    auto now = Clock::now();
+    if (lastPx >= 0 && std::chrono::duration<float>(now - lastCheck).count() < 1.0f)
+        return;
+    lastCheck = now;
+
+    int px = GetSafeInsetTopPx();
+    if (px != lastPx) {
+        lastPx = px;
+        DashboardSetTopInset(g_densityScale > 0.0f ? (float)px / g_densityScale : 0.0f);
+    }
+}
+
 // 값이 바뀌었을 때만 JNI를 넘어가도록 변경 감지 (매 프레임 호출해도 저렴하게).
 static bool g_privacyInit = false;
 static bool g_lastPrivacyMode = false;
@@ -221,6 +265,32 @@ static void SyncPrivacyPresentationIfChanged() {
         UpdatePrivacyPresentation(g_state.disguiseMode);
         g_lastPrivacyMode = g_state.disguiseMode;
         g_privacyInit = true;
+    }
+}
+
+// JNI: 백그라운드 실행 여부에 맞춰 포그라운드 서비스를 시작/중지한다.
+// MainActivity.setBackgroundEnabled(boolean)을 호출한다.
+static void UpdateBackgroundEnabled(bool enabled) {
+    if (!g_App) return;
+    JavaVM* vm = g_App->activity->vm;
+    JNIEnv* env = nullptr;
+    if (vm->AttachCurrentThread(&env, nullptr) != JNI_OK) return;
+    jclass cls = env->GetObjectClass(g_App->activity->clazz);
+    jmethodID mid = env->GetMethodID(cls, "setBackgroundEnabled", "(Z)V");
+    if (mid) {
+        env->CallVoidMethod(g_App->activity->clazz, mid, (jboolean)enabled);
+        if (env->ExceptionCheck()) env->ExceptionClear();
+    }
+    vm->DetachCurrentThread();
+}
+
+static bool g_bgEnabledInit = false;
+static bool g_lastBgEnabled = true;
+static void SyncBackgroundEnabledIfChanged() {
+    if (!g_bgEnabledInit || g_state.backgroundEnabled != g_lastBgEnabled) {
+        UpdateBackgroundEnabled(g_state.backgroundEnabled);
+        g_lastBgEnabled = g_state.backgroundEnabled;
+        g_bgEnabledInit = true;
     }
 }
 
@@ -249,6 +319,7 @@ static void TickIfDue() {
     SaveGame(g_state);
     WriteWidgetInfo();
     SyncPrivacyPresentationIfChanged();
+    SyncBackgroundEnabledIfChanged();
     if (!evt.empty())
         PostEventNotification(evt, g_state.disguiseMode);
 }
@@ -273,17 +344,24 @@ static void MainLoopStep() {
     // 화면 폭이 얼마든 논리 좌표 폭이 항상 460이 되게 강제한다.
     // (dpi 버킷 기반으로 계산하면 기기별 논리 폭이 460보다 좁아질 수 있어
     //  SameLine(100)+ProgressBar(320) 같은 조합이 화면 밖으로 넘쳐 잘려 보였음)
-    constexpr float kDesignWidth = 460.0f;
+    // 좌우 여백만큼 논리 캔버스를 더 넓게(460+여백*2) 잡고, 실제 460폭 콘텐츠는
+    // dashboard.cpp에서 가운데로 밀어 넣는다 — 콘텐츠 폭 자체는 안 바뀌므로 잘림 위험 없음.
+    constexpr float kDesignWidth  = 460.0f;
+    constexpr float kSideMarginDp = 14.0f;
+    constexpr float kTotalWidth   = kDesignWidth + kSideMarginDp * 2.0f;
     float rawW = io.DisplaySize.x;
     float rawH = io.DisplaySize.y;
-    g_densityScale = (rawW > 0.0f) ? (rawW / kDesignWidth) : 1.0f;
-    io.DisplaySize = ImVec2(kDesignWidth, rawH / g_densityScale);
+    g_densityScale = (rawW > 0.0f) ? (rawW / kTotalWidth) : 1.0f;
+    io.DisplaySize = ImVec2(kTotalWidth, rawH / g_densityScale);
     io.DisplayFramebufferScale = ImVec2(g_densityScale, g_densityScale);
+    DashboardSetSideMargin(kSideMarginDp);
+    SyncTopInsetIfChanged(); // g_densityScale이 막 갱신됐으니 이 시점에 dp로 환산
 
     ImGui::NewFrame();
 
     DashboardDrawUI(g_state);
     SyncPrivacyPresentationIfChanged(); // 방금 대시보드에서 토글했으면 즉시 반영
+    SyncBackgroundEnabledIfChanged();
 
     ImGui::Render();
     glClearColor(0.10f, 0.10f, 0.10f, 1.0f);

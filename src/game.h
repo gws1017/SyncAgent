@@ -142,9 +142,15 @@ struct GameState {
 
     int language = 0; // 0=한국어, 1=영어. g_lang(lang.h)과 동기화해서 저장/불러오기함
 
-    // 위장 모드 — 켜면 대시보드가 가짜 동기화 로그 화면으로 바뀜 (실제 게임 UI는 숨김).
-    // 스토어에는 게임이라고 정직하게 올리되, 유저가 원할 때만 켜는 "보스키"류 기능.
+    // 프라이버시 모드 — 켜면 창 제목/트레이/알림 표시 이름이 "sync agent"로 바뀜
+    // (화면 내용은 그대로). 스토어에는 게임이라고 정직하게 올리되, 유저가 원할 때만
+    // 켜는 "보스키"류 기능. 기본값은 항상 꺼짐.
     bool disguiseMode = false;
+
+    // 백그라운드 실행 — 꺼두면 안드로이드는 포그라운드 서비스(상시 알림)를 내려서
+    // 앱을 최소화했을 때 성장이 멈추고, PC는 대시보드가 닫혀 있는 동안 틱을 건너뜀.
+    // 기본값은 켜짐(방치형 게임의 핵심 동작 유지).
+    bool backgroundEnabled = true;
 
     Hero&       Active()       { return heroes[activeHero]; }
     const Hero& Active() const { return heroes[activeHero]; }

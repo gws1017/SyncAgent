@@ -23,6 +23,12 @@ class MainActivity : NativeActivity() {
         const val EVENT_CHANNEL_ID = "sync_events"
     }
 
+    // 카메라 펀치홀/노치의 상단 안전 영역 높이. 리스너로 UI 스레드에서만 갱신하고
+    // 네이티브 글루 스레드에서는 이 캐시된 값만 읽는다 (View 속성은 UI 스레드 전용이라
+    // JNI 호출 시점에 직접 읽으면 스레드 문제가 생길 수 있음 — updatePrivacyPresentation
+    // 때 겪었던 것과 같은 종류의 문제라 처음부터 이렇게 설계함).
+    @Volatile private var cachedSafeInsetTop: Int = 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -31,6 +37,13 @@ class MainActivity : NativeActivity() {
             != PackageManager.PERMISSION_GRANTED
         ) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.decorView.setOnApplyWindowInsetsListener { v, insets ->
+                cachedSafeInsetTop = insets.displayCutout?.safeInsetTop ?: 0
+                v.onApplyWindowInsets(insets)
+            }
         }
 
         createEventChannel()
@@ -114,10 +127,27 @@ class MainActivity : NativeActivity() {
         }
     }
 
+    // 네이티브에서 "백그라운드 실행" 설정이 바뀔 때마다 호출. 꺼지면 포그라운드
+    // 서비스를 완전히 내려서 상시 알림도 같이 사라지고, 앱을 백그라운드로 보내면
+    // 시스템이 프로세스를 자유롭게 종료할 수 있게 된다(=성장이 멈춤). 강제종료 없이도
+    // 유저가 직접 켰다 껐다 할 수 있게 하기 위함.
+    fun setBackgroundEnabled(enabled: Boolean) {
+        if (enabled) {
+            startSyncService()
+        } else {
+            stopService(Intent(this, SyncService::class.java))
+        }
+    }
+
     // ---- 네이티브(cloud_sync_android.cpp)가 JNI로 호출하는 클라우드 동기화 래퍼 ----
     fun cloudGetSavedCode(): String = CloudSync.getSavedCode()
     fun cloudGenerateCode(): String = CloudSync.generateCode()
     fun cloudSetCode(code: String) { CloudSync.setCode(code) }
     fun cloudUpload(code: String, saveText: String): String = CloudSync.upload(code, saveText)
     fun cloudDownload(code: String): String = CloudSync.download(code)
+
+    // 카메라 펀치홀/노치가 차지하는 상단 안전 영역 높이(실제 픽셀). 네이티브가 주기적으로
+    // 호출해서 UI를 그 아래로 밀어낸다. 뷰가 아직 레이아웃되기 전이면 0을 반환하며,
+    // 리스너가 갱신하고 나면 다음 호출부터 정상 값이 잡힌다.
+    fun getSafeInsetTopPx(): Int = cachedSafeInsetTop
 }

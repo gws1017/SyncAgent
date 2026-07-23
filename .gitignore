@@ -40,3 +40,5 @@ android/**/*.iml
 android/captures/
 *.keystore
 *.jks
+android/keystore.properties
+android/upload-keystore.jks

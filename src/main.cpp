@@ -42,13 +42,17 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_TIMER:
         if (wp == TIMER_TICK) {
-            g_state.totalRunSec += TICK_MS / 1000.0; // 위장 가동 시간 누적
-            std::wstring notify = GameTick(g_state);
-            if (!notify.empty())
-                TrayNotify(L"Background sync", notify);
+            // 백그라운드 실행이 꺼져 있으면 대시보드가 안 보일 때 성장을 멈춘다
+            // (강제종료 없이 유저가 직접 껐다 켰다 할 수 있게 하는 옵션).
+            if (g_state.backgroundEnabled || DashboardIsVisible()) {
+                g_state.totalRunSec += TICK_MS / 1000.0; // 위장 가동 시간 누적
+                std::wstring notify = GameTick(g_state);
+                if (!notify.empty())
+                    TrayNotify(L"Background sync", notify);
+                SaveGame(g_state);
+            }
             UpdateTrayTooltip();
             SyncTrayIconIfChanged();
-            SaveGame(g_state);
         }
         return 0;
 

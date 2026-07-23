@@ -56,24 +56,24 @@ const Talent kTalentDefs[3][TAL_COUNT] = {
         { "전장의 분노 (패시브)", "Battle Rage (Passive)",   "공격력 +8% / 포인트",       "+8% attack / point",        0, 10 },
         { "처단자 (패시브)",      "Executioner (Passive)",   "보스 데미지 +15% / 포인트", "+15% boss damage / point",  0, 10 },
         { "불굴의 의지 (패시브)", "Unbreakable (Passive)",   "최대체력 +5% / 포인트",     "+5% max HP / point",        0, 10 },
-        { "광전사 (패시브)",      "Berserker (Passive)",     "공격력 +6% / 포인트",       "+6% attack / point",        0, 10 },
-        { "수호자 (패시브)",      "Guardian (Passive)",      "방어력 +8% / 포인트",       "+8% defense / point",       0, 10 },
+        { "광전사 (패시브)",      "Berserker (Passive)",     "공격력 +8% / 포인트",       "+8% attack / point",        0, 10 },
+        { "수호자 (패시브)",      "Guardian (Passive)",      "방어력 +10% / 포인트",      "+10% defense / point",      0, 10 },
     },
     { // 마법사 — 불안정한 폭딜, 자가 회복으로 보완
         { "마나 증폭 (패시브)",   "Mana Amplify (Passive)",  "폭발 데미지 +15% / 포인트",   "+15% burst damage / point",   0, 10 },
         { "마력 폭주 (패시브)",   "Mana Surge (Passive)",    "폭발 확률 +2%p / 포인트",     "+2%p burst chance / point",   0, 10 },
         { "마나 흡혈 (패시브)",   "Mana Drain (Passive)",    "체력흡수 +3% / 포인트",       "+3% lifesteal / point",       0, 10 },
         { "마나 코어 (패시브)",   "Mana Core (Passive)",     "최대체력 +5% / 포인트",       "+5% max HP / point",          0, 10 },
-        { "원소 폭발 (패시브)",   "Elemental Burst (Passive)","폭발 데미지 +10% / 포인트",  "+10% burst damage / point",   0, 10 },
-        { "흡혼 (패시브)",        "Soul Drain (Passive)",    "체력흡수 +2% / 포인트",       "+2% lifesteal / point",       0, 10 },
+        { "원소 폭발 (패시브)",   "Elemental Burst (Passive)","폭발 데미지 +15% / 포인트",  "+15% burst damage / point",   0, 10 },
+        { "흡혼 (패시브)",        "Soul Drain (Passive)",    "체력흡수 +3% / 포인트",       "+3% lifesteal / point",       0, 10 },
     },
     { // 도적 — 빠르고 잘 피하는 다회타
         { "연속 공격 (패시브)",   "Rapid Strikes (Passive)", "공격속도 +10% / 포인트",       "+10% attack speed / point",      0, 10 },
         { "기습 (확률)",          "Ambush (Chance)",         "추가 공격 확률 +4%p / 포인트", "+4%p extra attack chance / point", 0, 10 },
         { "은신 회피 (패시브)",   "Stealth Evasion (Passive)","받는 피해 -5% / 포인트",      "-5% damage taken / point",       0, 10 },
-        { "쾌속 (패시브)",        "Swiftness (Passive)",     "공격속도 +6% / 포인트",        "+6% attack speed / point",       0, 10 },
-        { "치명적 기습 (확률)",   "Deadly Ambush (Chance)",  "추가 공격 확률 +3%p / 포인트", "+3%p extra attack chance / point", 0, 10 },
-        { "야성 (패시브)",        "Wild Instinct (Passive)", "받는 피해 -4% / 포인트",       "-4% damage taken / point",       0, 10 },
+        { "쾌속 (패시브)",        "Swiftness (Passive)",     "공격속도 +10% / 포인트",       "+10% attack speed / point",      0, 10 },
+        { "치명적 기습 (확률)",   "Deadly Ambush (Chance)",  "추가 공격 확률 +4%p / 포인트", "+4%p extra attack chance / point", 0, 10 },
+        { "야성 (패시브)",        "Wild Instinct (Passive)", "받는 피해 -5% / 포인트",       "-5% damage taken / point",       0, 10 },
     },
 };
 
@@ -90,29 +90,32 @@ void InitTalentsForClass(Hero& hero) {
 TalentBonuses ComputeTalentBonuses(const Hero& hero) {
     TalentBonuses b;
     switch (hero.playerClass) {
+    // 2차 특성(TAL_3~5)이 1차보다 계수가 낮게(20~40%) 설계되어 있어서 "2차가 항상
+    // 손해"로 느껴진다는 피드백이 있었음 — 매칭되는 스탯 계수를 1차와 동일하게 맞추고,
+    // 체력 보너스만 2차 고유 혜택으로 남김 (그래서 2차 투자가 1차보다 못하지 않게 됨).
     case CLASS_WARRIOR:
         b.defenseBonus = hero.talents[TAL_0].level * 0.10f; // 철벽 방어
         b.atkBonus     = hero.talents[TAL_1].level * 0.08f; // 전장의 분노
         b.bossDmgBonus = hero.talents[TAL_2].level * 0.15f; // 처단자
         b.hpBonus      = hero.talents[TAL_3].level * 0.05f; // 불굴의 의지
-        b.atkBonus    += hero.talents[TAL_4].level * 0.06f; // 광전사
-        b.defenseBonus+= hero.talents[TAL_5].level * 0.08f; // 수호자
+        b.atkBonus    += hero.talents[TAL_4].level * 0.08f; // 광전사
+        b.defenseBonus+= hero.talents[TAL_5].level * 0.10f; // 수호자
         break;
     case CLASS_MAGE:
         b.critDmgBonus    = hero.talents[TAL_0].level * 0.15f; // 마나 증폭
         b.critChanceBonus = hero.talents[TAL_1].level * 2.0f;  // 마력 폭주
         b.lifestealBonus  = hero.talents[TAL_2].level * 0.03f; // 마나 흡혈
         b.hpBonus         = hero.talents[TAL_3].level * 0.05f; // 마나 코어
-        b.critDmgBonus   += hero.talents[TAL_4].level * 0.10f; // 원소 폭발
-        b.lifestealBonus += hero.talents[TAL_5].level * 0.02f; // 흡혼
+        b.critDmgBonus   += hero.talents[TAL_4].level * 0.15f; // 원소 폭발
+        b.lifestealBonus += hero.talents[TAL_5].level * 0.03f; // 흡혼
         break;
     case CLASS_ROGUE:
         b.atkSpeedBonus  = hero.talents[TAL_0].level * 0.10f; // 연속 공격
         b.extraAtkChance = hero.talents[TAL_1].level * 4.0f;  // 기습
         b.evasionBonus   = hero.talents[TAL_2].level * 0.05f; // 은신 회피
-        b.atkSpeedBonus += hero.talents[TAL_3].level * 0.06f; // 쾌속
-        b.extraAtkChance+= hero.talents[TAL_4].level * 3.0f;  // 치명적 기습
-        b.evasionBonus  += hero.talents[TAL_5].level * 0.04f; // 야성
+        b.atkSpeedBonus += hero.talents[TAL_3].level * 0.10f; // 쾌속
+        b.extraAtkChance+= hero.talents[TAL_4].level * 4.0f;  // 치명적 기습
+        b.evasionBonus  += hero.talents[TAL_5].level * 0.05f; // 야성
         break;
     default:
         break;
@@ -151,7 +154,9 @@ long long PlayerBaseDef(int stage) {
 }
 
 long long PlayerBaseMaxHp(int stage) {
-    return 200 + (long long)stage * 8;
+    // 초반이 너무 쉽게 죽는다("개복치")는 피드백으로 기본값을 200→350으로 올림.
+    // 스테이지당 성장률(8)은 그대로라 이후 곡선 자체는 안 바뀜, 초반 쿠션만 확보.
+    return 350 + (long long)stage * 8;
 }
 
 // 방어력 적용 — 비율 기반 감소(diminishing returns). defValue가 커질수록 감소율이
@@ -477,10 +482,11 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
             hero.lastEvent = buf;
             if (notify.empty() && dropped.grade >= Grade::Rare) notify = buf;
         } else {
-            // 보관함이 가득 차서 드랍이 그대로 버려짐 — 놓치고 있다는 걸 알려줘야 함
+            // 보관함이 가득 차서 드랍이 그대로 버려짐 — 대시보드(최근 이벤트)에는 남기지만
+            // 푸시 알림은 안 보냄. 드랍 롤이 될 때마다(가방 꽉 찬 동안 계속) 반복 알림이
+            // 뜨는 게 과하다는 피드백 대응 — 확인은 대시보드 열었을 때 하면 충분함.
             swprintf(buf, 80, TW(L"[sync] 보관함 가득 참 — %ls 아이템을 놓쳤습니다!", L"[sync] Bag full — missed a %ls item!"), GradeNameW(dropped.grade));
             hero.lastEvent = buf;
-            if (notify.empty()) notify = buf;
         }
     }
 

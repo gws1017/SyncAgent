@@ -107,6 +107,23 @@ static LRESULT CALLBACK DashWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 // 언제든 이 화면으로 돌아와서 다른 영웅으로 전환할 수 있음 (진행 상황은 안 사라짐).
 static void ScreenHeroSelect(GameState& state) {
     ImGui::Spacing();
+
+    // ---- 최초 실행 온보딩 — 영웅을 한 번도 안 키워봤을 때만 표시.
+    // "갑자기 자동 진행이라 당황스럽다"는 피드백 대응 (비공개 테스트 피드백 #1).
+    bool everPlayedAny = false;
+    for (int i = 0; i < GameState::ROSTER_SIZE; i++)
+        if (state.heroes[i].everPlayed) { everPlayedAny = true; break; }
+    if (!everPlayedAny) {
+        ImGui::TextWrapped("%s", T(
+            "이 게임은 방치형(자동 진행) RPG입니다. 아래에서 직업을 하나 고르면, "
+            "그 순간부터 던전 전투/레벨업/골드 획득이 전부 자동으로 진행됩니다 — "
+            "화면을 계속 보고 있지 않아도, 앱을 최소화해도 그대로 자랍니다.",
+            "This is an idle RPG. Pick a class below and combat, leveling, and gold "
+            "all progress automatically from then on — even while you're not looking, "
+            "or after you minimize the app."));
+        ImGui::Spacing();
+    }
+
     ImGui::TextDisabled("%s", T("영웅을 선택하세요  (전환해도 진행 상황은 유지됩니다)",
                                  "Choose a hero  (switching keeps everyone's progress)"));
     if (state.legacyPrestigeCount > 0) {
@@ -324,6 +341,51 @@ static void TabUpgrade(GameState& state) {
     ImGui::Spacing();
 
     ImGui::Text("%s", T("골드", "Gold"));      ImGui::SameLine(100); ImGui::Text("%lld G", hero.gold);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ---- 현재 배율 분해 표시 — GameTick과 완전히 같은 공식으로 계산해서
+    // "지금 골드/XP/드랍률이 기존 대비 몇 %인지" 한눈에 보이게 함.
+    // (비공개 테스트 피드백 #2: 증가율이 얼마나인지 표시가 없다는 요청 대응)
+    {
+        float legacyFrac = state.legacyBonusPct / 100.0f;
+
+        float xpUp   = hero.upgrades[UP_XP].level   * hero.upgrades[UP_XP].multiplier;
+        float goldUp = hero.upgrades[UP_GOLD].level * hero.upgrades[UP_GOLD].multiplier;
+        float dropUp = hero.upgrades[UP_DROP].level * hero.upgrades[UP_DROP].multiplier;
+
+        float xpMult   = 1.0f + xpUp   + legacyFrac;
+        float goldMult = 1.0f + goldUp + legacyFrac;
+        float dropMult = 1.0f + dropUp + legacyFrac;
+
+        if (hero.playerClass == CLASS_MAGE)    xpMult   *= 1.5f;
+        if (hero.playerClass == CLASS_WARRIOR) goldMult *= 1.2f;
+        if (hero.playerClass == CLASS_ROGUE)   goldMult *= 1.3f;
+        if (hero.playerClass == CLASS_ROGUE)   dropMult *= 2.0f;
+
+        float xpEq   = GetEquippedBonus(hero.inventory, StatType::Xp);
+        float goldEq = GetEquippedBonus(hero.inventory, StatType::Gold);
+        float dropEq = GetEquippedBonus(hero.inventory, StatType::Drop);
+        xpMult   += xpEq;
+        goldMult += goldEq;
+        dropMult += dropEq;
+
+        ImGui::TextDisabled("%s", T("현재 배율 (기본 100% 대비)", "Current multipliers (vs. base 100%)"));
+        auto Row = [&](const char* label, float mult, float upBonus, float eqBonus) {
+            ImGui::Text("%s", label); ImGui::SameLine(100);
+            ImGui::Text("%.0f%%", mult * 100.0f);
+            ImGui::SameLine(180);
+            ImGui::TextDisabled(T("(업글 +%.0f%%p, 계승 +%.0f%%p, 장비 +%.0f%%p)",
+                                   "(upg +%.0f%%p, legacy +%.0f%%p, gear +%.0f%%p)"),
+                                 upBonus * 100.0f, legacyFrac * 100.0f, eqBonus * 100.0f);
+        };
+        Row(T("골드", "Gold"),   goldMult, goldUp, goldEq);
+        Row(T("경험치", "XP"),   xpMult,   xpUp,   xpEq);
+        Row(T("드랍률", "Drop"), dropMult, dropUp, dropEq);
+    }
+
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();

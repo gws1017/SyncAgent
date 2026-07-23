@@ -729,8 +729,27 @@ static void TabDungeon(GameState& state) {
     }
     if (lifestealPct > 0.0f) {
         ImGui::Text("%s", T("체력흡수", "Lifesteal")); ImGui::SameLine(100); ImGui::Text("%.0f%%", lifestealPct * 100.0f);
-        if (hero.lastHealAmount > 0)
-            ImGui::TextColored({0.4f, 0.9f, 0.5f, 1.0f}, T("  ↳ 방금 +%lld 회복", "  -> just healed +%lld"), hero.lastHealAmount);
+
+        // 회복량이 그냥 고정 텍스트로 박혀있으면 다른 숫자들 사이에 묻혀서 눈에 안 띈다는
+        // 피드백 대응 — 애니메이션 없는 UI라 "지금 막 일어난 일"이라는 느낌을 주기 위해
+        // 틱이 바뀔 때마다(= 새 회복 이벤트) 잠깐 밝게 떴다가 서서히 옅어지게 함.
+        static double s_lastTickRunSec  = -1.0;
+        static double s_healPopupAtTime = -1000.0;
+        static long long s_healPopupAmount = 0;
+        if (state.totalRunSec != s_lastTickRunSec) {
+            s_lastTickRunSec = state.totalRunSec;
+            if (hero.lastHealAmount > 0) {
+                s_healPopupAtTime  = ImGui::GetTime();
+                s_healPopupAmount  = hero.lastHealAmount;
+            }
+        }
+        double elapsed = ImGui::GetTime() - s_healPopupAtTime;
+        constexpr double kPopupDuration = 2.0;
+        if (elapsed >= 0.0 && elapsed < kPopupDuration) {
+            float alpha = 1.0f - (float)(elapsed / kPopupDuration);
+            ImGui::SameLine();
+            ImGui::TextColored({0.4f, 0.9f, 0.5f, alpha}, T("  ↳ 방금 +%lld 회복!", "  -> just healed +%lld!"), s_healPopupAmount);
+        }
     }
     if (dmgToPlayer > 0) {
         ImGui::TextColored({1.0f, 0.4f, 0.3f, 1.0f},

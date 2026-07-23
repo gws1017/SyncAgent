@@ -187,9 +187,10 @@ static Grade RollDropGrade(int stage) {
 }
 
 // XP 곡선 — 지수 증가. 레벨이 오를수록 한 단계 올리는 데 필요한 경험치가 급격히 커져서
-// (예: 55레벨대면 요구치가 억 단위) 레벨업 자체가 점점 큰 이벤트가 됨.
+// 레벨업 자체가 점점 큰 이벤트가 됨. 기존 지수 1.30은 특성2 다 찍기도 전에
+// "떡벽"처럼 느껴진다는 피드백으로 1.25로 완화 (예: 50레벨 기준 요구치가 약 7배 줄어듦).
 long long XpForLevel(int level) {
-    return (long long)(50.0 * std::pow(1.30, level));
+    return (long long)(50.0 * std::pow(1.25, level));
 }
 
 static void InitDungeonStage(Dungeon& d) {

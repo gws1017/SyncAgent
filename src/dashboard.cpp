@@ -563,7 +563,9 @@ static void TabEquipment(GameState& state) {
 static void TabDungeon(GameState& state) {
     Hero& hero = state.Active();
     Dungeon& d = hero.dungeon;
-    float legacyBonusPct = state.legacyBonusPct;
+    // state.legacyBonusPct는 "37.5"처럼 퍼센트 숫자 그대로 저장됨 — 배율 계산엔
+    // 분수(0.375)로 써야 해서 여기서 나눔 (game.cpp GameTick과 동일한 이유/수정).
+    float legacyFrac = state.legacyBonusPct / 100.0f;
     ImGui::Spacing();
 
     // ---- 캐릭터 상태 (적 체력과 바로 비교되도록 같은 너비로 위에 배치) ----------
@@ -620,7 +622,7 @@ static void TabDungeon(GameState& state) {
 
     TalentBonuses tal = ComputeTalentBonuses(hero);
     float atkMult = 1.0f + GetEquippedBonus(hero.inventory, StatType::Attack)
-                         + legacyBonusPct
+                         + legacyFrac
                          + hero.upgrades[UP_ATK].level * hero.upgrades[UP_ATK].multiplier
                          + tal.atkBonus;
     // 공격속도는 데미지 배율이 아니라 "한 틱에 평균 몇 번 때리는지"를 나타냄 (game.cpp와 동일 모델)
@@ -629,7 +631,7 @@ static void TabDungeon(GameState& state) {
     long long baseAtk = (long long)(PlayerBaseAtk(d.stage) * atkMult);
     long long enemyDef = EnemyDefForStage(d.stage);
     long long enemyAtk = EnemyAtkForStage(d.stage);
-    long long playerDef = (long long)(PlayerBaseDef(d.stage) * (1.0f + GetEquippedBonus(hero.inventory, StatType::Defense) + tal.defenseBonus + legacyBonusPct));
+    long long playerDef = (long long)(PlayerBaseDef(d.stage) * (1.0f + GetEquippedBonus(hero.inventory, StatType::Defense) + tal.defenseBonus + legacyFrac));
     float lifestealPct = GetEquippedBonus(hero.inventory, StatType::Lifesteal) + tal.lifestealBonus;
     long long dmgToPlayer = MitigateDamage(enemyAtk, playerDef);
     dmgToPlayer = (long long)(dmgToPlayer * (1.0f - (std::min)(0.9f, tal.evasionBonus)));

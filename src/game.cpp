@@ -289,15 +289,21 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
     if (hero.dungeon.enemyMaxHp == 0)
         InitDungeonStage(hero.dungeon);
 
+    // legacyBonusPct는 "37.5"처럼 퍼센트 숫자 그대로 저장됨(표시 코드도 이 가정).
+    // 배율 계산에선 분수(0.375)로 써야 하는데 100으로 안 나누고 그대로 더하던 버그가
+    // 있었음 — 예를 들어 37.5%가 "1.375배"가 아니라 "38.5배"로 들어가서 프레스티지
+    // 한 번에 스탯이 수십 배씩 폭증했음. 여기서 한 번만 나눠서 이후엔 분수로 사용.
+    const float legacyFrac = legacyBonusPct / 100.0f;
+
     // 업그레이드 + 클래스 배율 계산
     float xpMult   = 1.0f + hero.upgrades[UP_XP].level   * hero.upgrades[UP_XP].multiplier;
     float goldMult = 1.0f + hero.upgrades[UP_GOLD].level  * hero.upgrades[UP_GOLD].multiplier;
     float dropMult = 1.0f + hero.upgrades[UP_DROP].level  * hero.upgrades[UP_DROP].multiplier;
 
     // 계승 보너스 — 어떤 영웅이든 프레스티지할 때마다 쌓이는 계정 전체 공용 보너스
-    xpMult   += legacyBonusPct;
-    goldMult += legacyBonusPct;
-    dropMult += legacyBonusPct;
+    xpMult   += legacyFrac;
+    goldMult += legacyFrac;
+    dropMult += legacyFrac;
 
     if (hero.playerClass == CLASS_MAGE)    xpMult   *= 1.5f;
     if (hero.playerClass == CLASS_WARRIOR) goldMult *= 1.2f;
@@ -319,7 +325,7 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
     TalentBonuses tal = ComputeTalentBonuses(hero);
 
     // 플레이어 체력 — 스테이지에 따라 소폭 성장 + 계승 보너스 + 2차 특성 보너스
-    long long maxHp = (long long)(PlayerBaseMaxHp(hero.dungeon.stage) * (1.0f + tal.hpBonus + legacyBonusPct));
+    long long maxHp = (long long)(PlayerBaseMaxHp(hero.dungeon.stage) * (1.0f + tal.hpBonus + legacyFrac));
     hero.playerMaxHp = maxHp;
     if (hero.playerHp <= 0 || hero.playerHp > maxHp) hero.playerHp = maxHp;
 
@@ -327,7 +333,7 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
     // 공격력 기반값은 몹보다 느리게 스테이지를 따라 성장하고, 그 위에
     // 투자(업그레이드/장비/계승/특성)가 곱연산으로 얹힘 — 투자가 여전히 핵심.
     float atkMult = 1.0f + GetEquippedBonus(hero.inventory, StatType::Attack)
-                         + legacyBonusPct
+                         + legacyFrac
                          + hero.upgrades[UP_ATK].level * hero.upgrades[UP_ATK].multiplier
                          + tal.atkBonus;
     // 공격속도 — 데미지를 곱해 늘리는 게 아니라 "한 틱에 몇 번 때리는지"를 결정함.
@@ -407,7 +413,7 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
     }
 
     // 적 반격 — 방어력/체력흡수 투자가 부족하면 죽어서 전투가 리셋됨 (스테이지는 유지)
-    long long playerDef = (long long)(PlayerBaseDef(hero.dungeon.stage) * (1.0f + GetEquippedBonus(hero.inventory, StatType::Defense) + tal.defenseBonus + legacyBonusPct));
+    long long playerDef = (long long)(PlayerBaseDef(hero.dungeon.stage) * (1.0f + GetEquippedBonus(hero.inventory, StatType::Defense) + tal.defenseBonus + legacyFrac));
     long long enemyAtk   = EnemyAtkForStage(hero.dungeon.stage);
     long long dmgToPlayer = MitigateDamage(enemyAtk, playerDef);
     dmgToPlayer = (long long)(dmgToPlayer * (1.0f - std::min(0.9f, tal.evasionBonus))); // 은신 회피

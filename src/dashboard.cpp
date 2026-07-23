@@ -510,8 +510,9 @@ static void TabEquipment(GameState& state) {
     int gradeCnt[4] = {};
     for (const Item& it : inv.items) gradeCnt[(int)it.grade]++;
 
+    Hero& activeHero = state.Active();
     for (int i = 0; i < (int)inv.items.size(); i++) {
-        const Item& it = inv.items[i];
+        Item& it = inv.items[i];
         ImGui::PushID(i);
         ImGui::TextColored(GradeColor(it.grade), "[%s]", GradeName(it.grade));
         ImGui::SameLine();
@@ -521,6 +522,27 @@ static void TabEquipment(GameState& state) {
         if (!canEquip) ImGui::BeginDisabled();
         if (ImGui::SmallButton(T("장착", "Equip"))) TryEquip(inv, i);
         if (!canEquip) ImGui::EndDisabled();
+
+        // ---- 리롤 (스탯 종류만 재추첨, 등급/보너스%는 유지) ----------------------
+        ImGui::SameLine();
+        long long rerollCost = RerollCost(it.grade);
+        bool canReroll = activeHero.gold >= rerollCost;
+        if (!canReroll) ImGui::BeginDisabled();
+        char rerollLabel[32];
+        snprintf(rerollLabel, sizeof(rerollLabel), T("리롤 (%lldG)", "Reroll (%lldG)"), rerollCost);
+        if (ImGui::SmallButton(rerollLabel)) {
+            activeHero.gold -= rerollCost;
+            RerollItem(it);
+        }
+        if (!canReroll) ImGui::EndDisabled();
+
+        // ---- 삭제 (되돌릴 수 없음, 칸 낭비되는 잡템 정리용) ----------------------
+        ImGui::SameLine();
+        if (ImGui::SmallButton(T("삭제", "Delete"))) {
+            DeleteItem(inv, i);
+            ImGui::PopID();
+            continue; // 벡터가 한 칸 당겨졌으니 인덱스 재사용 없이 다음 프레임에 다시 그림
+        }
         ImGui::PopID();
     }
 

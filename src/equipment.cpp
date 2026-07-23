@@ -3,6 +3,7 @@
 #include <random>
 #include <sstream>
 #include <algorithm>
+#include <cmath>
 
 static std::mt19937 g_rng{ std::random_device{}() };
 
@@ -111,6 +112,21 @@ void Unequip(Inventory& inv, int equipIdx) {
     if ((int)inv.items.size() >= Inventory::MAX_ITEMS) return;
     inv.items.push_back(inv.equipped[equipIdx]);
     inv.equipped.erase(inv.equipped.begin() + equipIdx);
+}
+
+void DeleteItem(Inventory& inv, int itemIdx) {
+    if (itemIdx < 0 || itemIdx >= (int)inv.items.size()) return;
+    inv.items.erase(inv.items.begin() + itemIdx);
+}
+
+// 등급이 높을수록 리롤 비용도 커짐 (희귀도에 비례)
+long long RerollCost(Grade g) {
+    return (long long)(100.0 * std::pow(4.0, (int)g));
+}
+
+void RerollItem(Item& item) {
+    std::uniform_int_distribution<int> statRoll(0, (int)StatType::STAT_COUNT - 1);
+    item.stat = (StatType)statRoll(g_rng); // 등급/보너스%는 유지, 스탯 종류만 재추첨
 }
 
 // ---- 스탯 합산 --------------------------------------------------------------

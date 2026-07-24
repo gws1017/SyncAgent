@@ -579,7 +579,9 @@ static void TabEquipment(GameState& state) {
         ImGui::TextColored(GradeColor(it.grade), "[%s]", GradeName(it.grade));
         ImGui::SameLine();
         ImGui::Text("%s +%.0f%%", StatName(it.stat), it.bonus * 100.0f);
-        ImGui::SameLine(300);
+
+        // 버튼 3개(장착/리롤/삭제)를 정보 텍스트랑 같은 줄에 억지로 욱여넣으면
+        // 창 폭(460)을 넘어가서 잘림 — 버튼들은 다음 줄로 내려서 항상 폭 안에 들어오게 함.
         bool canEquip = (int)inv.equipped.size() < Inventory::MAX_EQUIP;
         if (!canEquip) ImGui::BeginDisabled();
         if (ImGui::SmallButton(T("장착", "Equip"))) TryEquip(inv, i);

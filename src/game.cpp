@@ -399,14 +399,18 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
     // — 버려지는 나머지를 lifestealCarry에 이월해서 누적되면 결국 반영되게 함.
     float lifestealPct = GetEquippedBonus(hero.inventory, StatType::Lifesteal) + tal.lifestealBonus;
     hero.lastHealAmount = 0;
+    hero.lastHealFrac   = 0.0f;
     if (totalDmg > 0 && lifestealPct > 0.0f) {
-        float healF = (float)totalDmg * lifestealPct + hero.lifestealCarry;
+        float rawHeal = (float)totalDmg * lifestealPct; // 이번 틱에 "실제로 계산된" 양(소숫점)
+        hero.lastHealFrac = rawHeal; // 정수 반영 여부와 무관하게 팝업 표시용으로 항상 남김
+
+        float healF = rawHeal + hero.lifestealCarry;
         long long heal = (long long)healF; // 정수부만 이번 틱에 적용
         hero.lifestealCarry = healF - (float)heal; // 나머지는 다음 틱으로 이월
         if (heal > 0) {
             long long before = hero.playerHp;
             hero.playerHp = std::min(maxHp, hero.playerHp + heal);
-            hero.lastHealAmount = hero.playerHp - before; // 화면에 "+N 회복" 표시용
+            hero.lastHealAmount = hero.playerHp - before; // 실제 HP에 반영된 정수량
         }
     }
 

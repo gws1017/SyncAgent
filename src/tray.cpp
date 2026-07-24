@@ -5,7 +5,7 @@
 static NOTIFYICONDATAW g_nid = {};
 static HINSTANCE g_hInst = nullptr;
 
-static constexpr UINT IDI_APPICON      = 101; // 기본(정직) — 판타지 검 아이콘
+static constexpr UINT IDI_APPICON      = 101; // 기본(정직) — 마름모(젬) 아이콘
 static constexpr UINT IDI_APPICON_SYNC = 102; // 프라이버시 모드 — sync 아이콘
 
 void TrayInit(HWND hwnd, UINT callbackMsg, HINSTANCE hInst) {

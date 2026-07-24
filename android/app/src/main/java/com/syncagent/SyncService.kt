@@ -52,7 +52,7 @@ class SyncService : Service() {
         private fun buildNotification(context: Context, privacyMode: Boolean): android.app.Notification {
             val title = if (privacyMode) "sync agent" else "Text RPG"
             val text  = if (privacyMode) "백그라운드 동기화 중" else "백그라운드에서 진행 중"
-            val iconRes = if (privacyMode) android.R.drawable.stat_notify_sync else R.drawable.ic_game_notif
+            val iconRes = if (privacyMode) android.R.drawable.stat_notify_sync else R.drawable.ic_diamond_notif
             // 리소스 ID를 그대로 setSmallIcon(Int)에 넘기면 일부 OEM이 아이콘을
             // ID 기준으로 캐싱해서 안 바뀔 수 있음 — 매번 새 Bitmap을 디코드해서
             // IconCompat으로 넘기면 캐시 우회가 잘 됨.

@@ -70,7 +70,7 @@ class MainActivity : NativeActivity() {
     // 제목/아이콘은 프라이버시 모드를 그대로 반영 (기본은 정직하게 "Text RPG").
     fun postEventNotification(text: String, privacyMode: Boolean) {
         val title = if (privacyMode) "sync agent" else "Text RPG"
-        val icon  = if (privacyMode) android.R.drawable.stat_notify_sync else R.drawable.ic_game_notif
+        val icon  = if (privacyMode) android.R.drawable.stat_notify_sync else R.drawable.ic_diamond_notif
         val notification = NotificationCompat.Builder(this, EVENT_CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(text)

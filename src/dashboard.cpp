@@ -669,9 +669,13 @@ static void TabDungeon(GameState& state) {
 
     ImGui::Spacing();
     ImGui::Text("%s", T("내 체력", "My HP"));    ImGui::SameLine(100);
+    // HP 자체는 정수(long long)로 유지하되, 아직 반영 안 된 체력흡수 이월분
+    // (lifestealCarry)을 소숫점으로 얹어서 보여줌 — "흡혈이 계속 쌓이고 있다"는
+    // 게 눈에 보이게 (정수만 보이면 몇 틱 동안 그대로인 것처럼 느껴짐).
+    float displayHp = (float)hero.playerHp + hero.lifestealCarry;
     char playerHpOverlay[32];
-    snprintf(playerHpOverlay, sizeof(playerHpOverlay), "%lld / %lld", hero.playerHp, hero.playerMaxHp);
-    float playerHpFrac = (hero.playerMaxHp > 0) ? (float)hero.playerHp / (float)hero.playerMaxHp : 0.0f;
+    snprintf(playerHpOverlay, sizeof(playerHpOverlay), "%.1f / %lld", displayHp, hero.playerMaxHp);
+    float playerHpFrac = (hero.playerMaxHp > 0) ? displayHp / (float)hero.playerMaxHp : 0.0f;
     ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.30f, 0.80f, 0.35f, 1.0f));
     ImGui::ProgressBar(playerHpFrac, {320, 0}, playerHpOverlay);
     ImGui::PopStyleColor();

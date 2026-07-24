@@ -113,6 +113,10 @@ struct Hero {
     long long playerHp       = 200;
     long long playerMaxHp    = 200;
     long long lastHealAmount = 0; // 이번 틱 체력흡수 회복량 (표시용, 저장 안 함)
+    // 체력흡수 계산이 정수 HP로 버림 처리되면서 매번 소수점 이하가 그냥 사라지는
+    // 문제 대응 — 버려지는 나머지를 다음 틱으로 이월해서 결국은 반영되게 함
+    // (표시 전용 필드들과 마찬가지로 저장 안 함).
+    float     lifestealCarry = 0.0f;
     long long deathCount     = 0; // 전투 중 체력 0이 되어 초기화된 횟수 (이 영웅 기준)
 
     int prestigeCount = 0; // 이 영웅이 계승(프레스티지)한 횟수

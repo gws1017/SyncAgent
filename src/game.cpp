@@ -393,14 +393,21 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
     totalDmg = std::max(0LL, totalDmg - enemyDef);
     hero.dungeon.enemyHp -= totalDmg;
 
-    // 체력흡수 — 실제로 들어간 데미지 기준으로 회복 (장비 + 마법사 마나 흡혈)
+    // 체력흡수 — 실제로 들어간 데미지 기준으로 회복 (장비 + 마법사 마나 흡혈).
+    // 정수 HP로 그냥 버림 처리하면 데미지가 작고 흡혈%가 낮을 때(예: 14뎀 x 3%=0.42)
+    // 매번 0으로 사라져서 "크리티컬 터질 때만 회복되는" 것처럼 보이는 문제가 있었음
+    // — 버려지는 나머지를 lifestealCarry에 이월해서 누적되면 결국 반영되게 함.
     float lifestealPct = GetEquippedBonus(hero.inventory, StatType::Lifesteal) + tal.lifestealBonus;
     hero.lastHealAmount = 0;
     if (totalDmg > 0 && lifestealPct > 0.0f) {
-        long long heal = (long long)(totalDmg * lifestealPct);
-        long long before = hero.playerHp;
-        hero.playerHp = std::min(maxHp, hero.playerHp + heal);
-        hero.lastHealAmount = hero.playerHp - before; // 화면에 "+N 회복" 표시용
+        float healF = (float)totalDmg * lifestealPct + hero.lifestealCarry;
+        long long heal = (long long)healF; // 정수부만 이번 틱에 적용
+        hero.lifestealCarry = healF - (float)heal; // 나머지는 다음 틱으로 이월
+        if (heal > 0) {
+            long long before = hero.playerHp;
+            hero.playerHp = std::min(maxHp, hero.playerHp + heal);
+            hero.lastHealAmount = hero.playerHp - before; // 화면에 "+N 회복" 표시용
+        }
     }
 
     if (hero.dungeon.enemyHp <= 0) {

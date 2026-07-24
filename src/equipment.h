@@ -8,7 +8,8 @@ enum class StatType { Attack = 0, Xp, Gold, Drop, Defense, Lifesteal, AtkSpeed, 
 struct Item {
     Grade    grade;
     StatType stat;
-    float    bonus; // ex) 0.05 = +5%
+    float    bonus;     // ex) 0.05 = +5%
+    bool     rerolled = false; // 리롤은 아이템당 평생 한 번만 (영웅 등급 이상만 가능)
 };
 
 struct Inventory {

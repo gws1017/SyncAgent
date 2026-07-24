@@ -588,24 +588,36 @@ static void TabEquipment(GameState& state) {
         if (!canEquip) ImGui::EndDisabled();
 
         // ---- 리롤 (스탯 종류만 재추첨, 등급/보너스%는 유지) ----------------------
-        ImGui::SameLine();
-        long long rerollCost = RerollCost(it.grade);
-        bool canReroll = activeHero.gold >= rerollCost;
-        if (!canReroll) ImGui::BeginDisabled();
-        char rerollLabel[32];
-        snprintf(rerollLabel, sizeof(rerollLabel), T("리롤 (%lldG)", "Reroll (%lldG)"), rerollCost);
-        if (ImGui::SmallButton(rerollLabel)) {
-            activeHero.gold -= rerollCost;
-            RerollItem(it);
+        // 영웅 등급 이상부터만, 아이템당 평생 한 번만 가능 — 낮은 등급까지 되면
+        // 저등급 잡템에 계속 골드를 태우는 게 의미가 없고, 무제한이면 리롤이
+        // 사실상 확정 뽑기가 되어버려서 한 번으로 제한.
+        bool rerollEligible = (it.grade >= Grade::Epic) && !it.rerolled;
+        if (rerollEligible) {
+            ImGui::SameLine();
+            long long rerollCost = RerollCost(it.grade);
+            bool canReroll = activeHero.gold >= rerollCost;
+            if (!canReroll) ImGui::BeginDisabled();
+            char rerollLabel[32];
+            snprintf(rerollLabel, sizeof(rerollLabel), T("리롤 (%lldG)", "Reroll (%lldG)"), rerollCost);
+            if (ImGui::SmallButton(rerollLabel)) {
+                activeHero.gold -= rerollCost;
+                RerollItem(it);
+            }
+            if (!canReroll) ImGui::EndDisabled();
         }
-        if (!canReroll) ImGui::EndDisabled();
 
-        // ---- 삭제 (되돌릴 수 없음, 칸 낭비되는 잡템 정리용) ----------------------
-        ImGui::SameLine();
-        if (ImGui::SmallButton(T("삭제", "Delete"))) {
-            DeleteItem(inv, i);
-            ImGui::PopID();
-            continue; // 벡터가 한 칸 당겨졌으니 인덱스 재사용 없이 다음 프레임에 다시 그림
+        // ---- 삭제 (되돌릴 수 없음, 전설 등급 전용) --------------------------------
+        // 낮은 등급은 합성으로 소모되니 굳이 삭제가 필요 없고, 합성 막장인 전설
+        // 등급만 스탯이 안 맞으면 영구히 칸을 차지함 — 그래서 전설에만 노출.
+        // 확인창 없이 바로 삭제되므로(여러 개 정리할 때 매번 확인받으면 번거로움),
+        // 실수 클릭 방지 차원에서 다른 버튼들과 줄을 띄우고 오른쪽 끝에 멀리 배치.
+        if (it.grade == Grade::Legendary) {
+            ImGui::SameLine(380);
+            if (ImGui::SmallButton(T("삭제", "Delete"))) {
+                DeleteItem(inv, i);
+                ImGui::PopID();
+                continue; // 벡터가 한 칸 당겨졌으니 인덱스 재사용 없이 다음 프레임에 다시 그림
+            }
         }
         ImGui::PopID();
     }

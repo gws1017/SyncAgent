@@ -127,6 +127,7 @@ long long RerollCost(Grade g) {
 void RerollItem(Item& item) {
     std::uniform_int_distribution<int> statRoll(0, (int)StatType::STAT_COUNT - 1);
     item.stat = (StatType)statRoll(g_rng); // 등급/보너스%는 유지, 스탯 종류만 재추첨
+    item.rerolled = true; // 아이템당 평생 한 번만 — 다시는 리롤 못 함
 }
 
 // ---- 스탯 합산 --------------------------------------------------------------
@@ -144,7 +145,7 @@ std::string SerializeInventory(const Inventory& inv) {
     auto write = [&](const std::vector<Item>& list) {
         for (int i = 0; i < (int)list.size(); i++) {
             if (i) oss << '|';
-            oss << (int)list[i].grade << ' ' << (int)list[i].stat;
+            oss << (int)list[i].grade << ' ' << (int)list[i].stat << ' ' << (list[i].rerolled ? 1 : 0);
         }
     };
     write(inv.items);
@@ -162,11 +163,12 @@ void DeserializeInventory(const std::string& data, Inventory& inv) {
         std::istringstream ss(chunk);
         std::string token;
         while (std::getline(ss, token, '|')) {
-            int g = 0, s = 0;
-            if (sscanf(token.c_str(), "%d %d", &g, &s) == 2) {
+            int g = 0, s = 0, r = 0;
+            int n = sscanf(token.c_str(), "%d %d %d", &g, &s, &r);
+            if (n == 2 || n == 3) { // 구버전 세이브는 r 필드가 없었으니 기본값(0)으로 처리
                 Grade  grade = (Grade)std::clamp(g, 0, 3);
                 StatType stat = (StatType)std::clamp(s, 0, (int)StatType::STAT_COUNT - 1);
-                out.push_back({ grade, stat, BonusForGrade(grade) });
+                out.push_back({ grade, stat, BonusForGrade(grade), r != 0 });
             }
         }
     };

@@ -95,6 +95,10 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
         return 0;
     }
 
+    // PC는 스토어 심사 정책이 없어서(사이드로드 배포) 안드로이드처럼 "기본은 정직하게"
+    // 강제할 필요가 없음 — 신규 설치 시엔 곧바로 프라이버시 모드로 시작. 세이브 파일이
+    // 있으면(기존 유저) LoadGame이 저장된 값으로 덮어써서 유저가 직접 끈 상태는 유지됨.
+    g_state.disguiseMode = true;
     LoadGame(g_state);
 
     const wchar_t* cls = L"SyncAgentMsg";

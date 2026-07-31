@@ -846,8 +846,12 @@ void DashboardDrawUI(GameState& state) {
         ImGuiWindowFlags_NoMove      |
         ImGuiWindowFlags_NoSavedSettings);
 
+    // 스크롤바를 항상 보이게(AlwaysVerticalScrollbar) — 특히 장비탭처럼 각 줄에
+    // 버튼(장착/리롤/삭제)이 빽빽하게 들어차 있으면, 터치로 드래그해서 스크롤할
+    // "빈 공간"을 손가락으로 찾기 어려워서 목록이 길어질수록 스크롤이 거의
+    // 안 되는 것처럼 느껴짐 — 항상 보이는 스크롤바를 직접 드래그할 수 있게 함.
     auto TabScrollable = [](const char* id, void (*fn)(GameState&), GameState& s) {
-        ImGui::BeginChild(id, {0, 0}, false);
+        ImGui::BeginChild(id, {0, 0}, false, ImGuiWindowFlags_AlwaysVerticalScrollbar);
         fn(s);
         ImGui::EndChild();
     };

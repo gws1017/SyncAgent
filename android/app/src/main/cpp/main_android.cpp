@@ -379,6 +379,21 @@ static void handleAppCmd(struct android_app* app, int32_t cmd) {
     }
 }
 
+// 터치를 그냥 마우스 클릭으로만 매핑하면, 버튼이 빽빽한 화면(장비탭 등)에서는
+// 스크롤하려고 손가락을 대는 지점마다 버튼 위여서 드래그해도 스크롤이 안 되고
+// 버튼이 눌려버림 — 다른 앱들처럼 "누른 채로 일정 거리 이상 움직이면 그건 스크롤,
+// 안 움직이고 뗐으면 그건 탭"으로 직접 구분해줘야 함. 그래서 DOWN 시점엔 아직
+// 버튼을 누르지 않고 있다가, MOVE에서 임계값을 넘으면 스크롤 모드로 전환해서
+// 휠 이벤트로 흘려보내고(버튼 위에 있어도 스크롤됨), 임계값을 안 넘고 UP이 오면
+// 그제서야 그 자리에서 클릭(다운+업)을 발생시켜서 탭으로 처리한다.
+static bool  g_touchActive     = false;
+static bool  g_touchIsScroll   = false;
+static float g_touchDownX      = 0.0f;
+static float g_touchDownY      = 0.0f;
+static float g_touchLastY      = 0.0f;
+static constexpr float kTouchScrollThresholdDp = 8.0f;  // 이 이상 움직이면 스크롤로 판정
+static constexpr float kTouchScrollPixelsPerWheelUnit = 40.0f; // 드래그 픽셀 -> 휠 단위 환산
+
 // 터치 좌표는 실제 화면 픽셀 단위로 들어오는데, io.DisplaySize는 dp(논리 좌표)로
 // 축소해뒀기 때문에 vendor 백엔드(ImGui_ImplAndroid_HandleInputEvent)에 그대로
 // 넘기면 좌표가 안 맞아서 버튼이 거의 눌리지 않는다. 모션 이벤트만 직접 처리해서
@@ -399,15 +414,38 @@ static int32_t handleInputEvent(struct android_app* app, AInputEvent* event) {
         case AMOTION_EVENT_ACTION_POINTER_DOWN:
             io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
             io.AddMousePosEvent(x, y);
-            io.AddMouseButtonEvent(0, true);
+            // 아직 버튼 다운은 보내지 않음 — 스크롤인지 탭인지 MOVE/UP에서 결정.
+            g_touchActive   = true;
+            g_touchIsScroll = false;
+            g_touchDownX    = x;
+            g_touchDownY    = y;
+            g_touchLastY    = y;
             return 1;
         case AMOTION_EVENT_ACTION_UP:
         case AMOTION_EVENT_ACTION_POINTER_UP:
             io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
             io.AddMousePosEvent(x, y);
-            io.AddMouseButtonEvent(0, false);
+            if (g_touchActive && !g_touchIsScroll) {
+                // 스크롤로 전환되지 않고 그대로 뗐으면 탭 — 이 시점에 클릭 발생시킴.
+                io.AddMouseButtonEvent(0, true);
+                io.AddMouseButtonEvent(0, false);
+            }
+            g_touchActive = false;
             return 1;
         case AMOTION_EVENT_ACTION_MOVE:
+            if (g_touchActive) {
+                if (!g_touchIsScroll) {
+                    float dx = x - g_touchDownX, dy = y - g_touchDownY;
+                    if (dx*dx + dy*dy > kTouchScrollThresholdDp * kTouchScrollThresholdDp)
+                        g_touchIsScroll = true;
+                }
+                if (g_touchIsScroll) {
+                    float dy = y - g_touchLastY;
+                    io.AddMouseWheelEvent(0.0f, -dy / kTouchScrollPixelsPerWheelUnit);
+                    g_touchLastY = y;
+                    return 1; // 스크롤 중엔 위치 갱신을 안 보내서 버튼 호버/클릭이 안 걸리게 함
+                }
+            }
             io.AddMousePosEvent(x, y);
             return 1;
         default:

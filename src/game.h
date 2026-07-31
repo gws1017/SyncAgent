@@ -71,16 +71,20 @@ static constexpr int MAX_TALENT_POINTS_T2  = 15; // 2차 풀 (talentPoints2)
 // 특성 포인트를 수치 보너스로 환산한 결과 (클래스마다 슬롯 의미가 다름).
 // GameTick과 대시보드 미리보기가 같은 함수를 써서 표시값과 실제값이 항상 일치하게 함.
 struct TalentBonuses {
-    float atkBonus        = 0.0f;
-    float atkSpeedBonus   = 0.0f;
+    float atkBonus        = 0.0f; // 음수 가능(디버프) — 라이프 드레인
+    float atkSpeedBonus   = 0.0f; // 음수 가능(디버프) — 수호자. 적용 시 0으로 클램프
     float bossDmgBonus    = 0.0f;
     float critChanceBonus = 0.0f;
-    float critDmgBonus    = 0.0f;
+    float critDmgBonus    = 0.0f; // 음수 가능(디버프) — 마나 코어
+    float normalDmgBonus  = 0.0f; // 마법사 평타(비폭발) 데미지 가감, 음수 가능(디버프) — 원소 폭발
     float lifestealBonus  = 0.0f;
-    float defenseBonus    = 0.0f;
-    float evasionBonus    = 0.0f;
+    float defenseBonus    = 0.0f; // 음수 가능(디버프) — 쾌속
+    float evasionBonus    = 0.0f; // 음수 가능(디버프) — 치명적 기습
     float extraAtkChance  = 0.0f;
-    float hpBonus         = 0.0f; // 2차 특성 전용 — 최대체력 % 증가
+    float defensePenBonus = 0.0f; // 적 방어력 무시 비율(0~1) — 치명적 기습
+    float dmgTakenBonus   = 0.0f; // 받는 피해 증가 비율(디버프) — 광전사
+    float conditionalDefenseBonus = 0.0f; // 불굴의 의지 — 체력 50% 이하일 때만 적용
+    float stealChance     = 0.0f; // 소매치기 성공 확률(0~100)
 };
 
 struct Dungeon {

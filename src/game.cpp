@@ -50,30 +50,34 @@ static void InitUpgrades(Hero& hero) {
 // 1차(슬롯 0~2): 레벨업마다 1포인트, 평생 15포인트 캡 (3개 다 풀업하는 30보다 적음).
 // 2차(슬롯 3~5): 25레벨부터 별도 풀로 1포인트씩, 마찬가지로 평생 15포인트 캡.
 // 클래스 컨셉에 맞춰 슬롯별 효과가 다름 (전사=탱커, 마법사=폭딜+자가회복, 도적=회피+다회타).
+// 2차 특성(TAL_3~5)은 1차보다 계수를 살짝 높이는 대신 각 이름 컨셉에 맞는 디버프를
+// 하나씩 끼워 넣어서 "그냥 더 센 버전"이 아니라 방향성 있는 트레이드오프가 되게 함
+// (불굴의 의지만 예외 — 조건부 발동 자체가 트레이드오프라 별도 디버프 없음).
 const Talent kTalentDefs[3][TAL_COUNT] = {
     { // 전사 — 단단한 근접 탱커
         { "철벽 방어 (패시브)",   "Iron Wall (Passive)",     "방어력 +10% / 포인트",      "+10% defense / point",      0, 10 },
         { "전장의 분노 (패시브)", "Battle Rage (Passive)",   "공격력 +8% / 포인트",       "+8% attack / point",        0, 10 },
         { "처단자 (패시브)",      "Executioner (Passive)",   "보스 데미지 +15% / 포인트", "+15% boss damage / point",  0, 10 },
-        { "불굴의 의지 (패시브)", "Unbreakable (Passive)",   "최대체력 +5% / 포인트",     "+5% max HP / point",        0, 10 },
-        { "광전사 (패시브)",      "Berserker (Passive)",     "공격력 +8% / 포인트",       "+8% attack / point",        0, 10 },
-        { "수호자 (패시브)",      "Guardian (Passive)",      "방어력 +10% / 포인트",      "+10% defense / point",      0, 10 },
+        { "불굴의 의지 (조건부)", "Unbreakable (Conditional)","체력 50% 이하일 때 방어력 +15% / 포인트", "Defense +15% / point when HP <= 50%", 0, 10 },
+        { "광전사 (패시브)",      "Berserker (Passive)",     "공격력 +10% / 포인트 (받는 피해 +5% / 포인트)", "+10% attack / point (+5% damage taken / point)", 0, 10 },
+        { "수호자 (패시브)",      "Guardian (Passive)",      "방어력 +10% / 포인트 (공격속도 -3% / 포인트)",  "+10% defense / point (-3% attack speed / point)", 0, 10 },
     },
     { // 마법사 — 불안정한 폭딜, 자가 회복으로 보완
         { "마나 증폭 (패시브)",   "Mana Amplify (Passive)",  "폭발 데미지 +15% / 포인트",   "+15% burst damage / point",   0, 10 },
         { "마력 폭주 (패시브)",   "Mana Surge (Passive)",    "폭발 확률 +2%p / 포인트",     "+2%p burst chance / point",   0, 10 },
         { "마나 흡혈 (패시브)",   "Mana Drain (Passive)",    "체력흡수 +3% / 포인트",       "+3% lifesteal / point",       0, 10 },
-        { "마나 코어 (패시브)",   "Mana Core (Passive)",     "최대체력 +5% / 포인트",       "+5% max HP / point",          0, 10 },
-        { "원소 폭발 (패시브)",   "Elemental Burst (Passive)","폭발 데미지 +15% / 포인트",  "+15% burst damage / point",   0, 10 },
-        { "흡혼 (패시브)",        "Soul Drain (Passive)",    "체력흡수 +3% / 포인트",       "+3% lifesteal / point",       0, 10 },
+        { "마나 코어 (패시브)",   "Mana Core (Passive)",     "폭발 확률 +3%p / 포인트 (폭발 데미지 -3% / 포인트)", "+3%p burst chance / point (-3% burst damage / point)", 0, 10 },
+        { "원소 폭발 (패시브)",   "Elemental Burst (Passive)","폭발 데미지 +20% / 포인트 (평타 데미지 -5% / 포인트)", "+20% burst damage / point (-5% normal damage / point)", 0, 10 },
+        { "라이프 드레인 (패시브)","Life Drain (Passive)",    "체력흡수 +4% / 포인트 (공격력 -3% / 포인트)",  "+4% lifesteal / point (-3% attack / point)", 0, 10 },
     },
     { // 도적 — 빠르고 잘 피하는 다회타
         { "연속 공격 (패시브)",   "Rapid Strikes (Passive)", "공격속도 +10% / 포인트",       "+10% attack speed / point",      0, 10 },
         { "기습 (확률)",          "Ambush (Chance)",         "추가 공격 확률 +4%p / 포인트", "+4%p extra attack chance / point", 0, 10 },
         { "은신 회피 (패시브)",   "Stealth Evasion (Passive)","받는 피해 -5% / 포인트",      "-5% damage taken / point",       0, 10 },
-        { "쾌속 (패시브)",        "Swiftness (Passive)",     "공격속도 +10% / 포인트",       "+10% attack speed / point",      0, 10 },
-        { "치명적 기습 (확률)",   "Deadly Ambush (Chance)",  "추가 공격 확률 +4%p / 포인트", "+4%p extra attack chance / point", 0, 10 },
-        { "야성 (패시브)",        "Wild Instinct (Passive)", "받는 피해 -5% / 포인트",       "-5% damage taken / point",       0, 10 },
+        { "쾌속 (패시브)",        "Swiftness (Passive)",     "공격속도 +12% / 포인트 (방어력 -3% / 포인트)", "+12% attack speed / point (-3% defense / point)", 0, 10 },
+        { "치명적 기습 (패시브)", "Deadly Ambush (Passive)", "방어관통 +5% / 포인트 (회피율 -3%p / 포인트)", "+5% defense penetration / point (-3%p evasion / point)", 0, 10 },
+        { "소매치기 (확률)",      "Pickpocket (Chance)",     "훔치기 성공률 +5%p / 포인트 — 성공 시 골드 +50%, 실패 시 체력 2% 피해",
+                                                              "+5%p steal chance / point - success: +50% gold, fail: 2%% max HP self-damage", 0, 10 },
     },
 };
 
@@ -90,32 +94,38 @@ void InitTalentsForClass(Hero& hero) {
 TalentBonuses ComputeTalentBonuses(const Hero& hero) {
     TalentBonuses b;
     switch (hero.playerClass) {
-    // 2차 특성(TAL_3~5)이 1차보다 계수가 낮게(20~40%) 설계되어 있어서 "2차가 항상
-    // 손해"로 느껴진다는 피드백이 있었음 — 매칭되는 스탯 계수를 1차와 동일하게 맞추고,
-    // 체력 보너스만 2차 고유 혜택으로 남김 (그래서 2차 투자가 1차보다 못하지 않게 됨).
+    // 1차(TAL_0~2)는 상시 패시브. 2차(TAL_3~5)는 이름 컨셉에 맞는 디버프를 하나씩
+    // 끼워 넣은 트레이드오프형(1.1.0 이후 재설계) — "그냥 더 센 버전"이 되지 않게 함.
     case CLASS_WARRIOR:
         b.defenseBonus = hero.talents[TAL_0].level * 0.10f; // 철벽 방어
         b.atkBonus     = hero.talents[TAL_1].level * 0.08f; // 전장의 분노
         b.bossDmgBonus = hero.talents[TAL_2].level * 0.15f; // 처단자
-        b.hpBonus      = hero.talents[TAL_3].level * 0.05f; // 불굴의 의지
-        b.atkBonus    += hero.talents[TAL_4].level * 0.08f; // 광전사
-        b.defenseBonus+= hero.talents[TAL_5].level * 0.10f; // 수호자
+        b.conditionalDefenseBonus = hero.talents[TAL_3].level * 0.15f; // 불굴의 의지 (체력 50% 이하일 때만)
+        b.atkBonus      += hero.talents[TAL_4].level * 0.10f; // 광전사
+        b.dmgTakenBonus  = hero.talents[TAL_4].level * 0.05f; // 광전사 디버프
+        b.defenseBonus  += hero.talents[TAL_5].level * 0.10f; // 수호자
+        b.atkSpeedBonus -= hero.talents[TAL_5].level * 0.03f; // 수호자 디버프
         break;
     case CLASS_MAGE:
         b.critDmgBonus    = hero.talents[TAL_0].level * 0.15f; // 마나 증폭
         b.critChanceBonus = hero.talents[TAL_1].level * 2.0f;  // 마력 폭주
         b.lifestealBonus  = hero.talents[TAL_2].level * 0.03f; // 마나 흡혈
-        b.hpBonus         = hero.talents[TAL_3].level * 0.05f; // 마나 코어
-        b.critDmgBonus   += hero.talents[TAL_4].level * 0.15f; // 원소 폭발
-        b.lifestealBonus += hero.talents[TAL_5].level * 0.03f; // 흡혼
+        b.critChanceBonus += hero.talents[TAL_3].level * 3.0f;  // 마나 코어
+        b.critDmgBonus    -= hero.talents[TAL_3].level * 0.03f; // 마나 코어 디버프
+        b.critDmgBonus    += hero.talents[TAL_4].level * 0.20f; // 원소 폭발
+        b.normalDmgBonus  -= hero.talents[TAL_4].level * 0.05f; // 원소 폭발 디버프
+        b.lifestealBonus  += hero.talents[TAL_5].level * 0.04f; // 라이프 드레인
+        b.atkBonus        -= hero.talents[TAL_5].level * 0.03f; // 라이프 드레인 디버프
         break;
     case CLASS_ROGUE:
         b.atkSpeedBonus  = hero.talents[TAL_0].level * 0.10f; // 연속 공격
         b.extraAtkChance = hero.talents[TAL_1].level * 4.0f;  // 기습
         b.evasionBonus   = hero.talents[TAL_2].level * 0.05f; // 은신 회피
-        b.atkSpeedBonus += hero.talents[TAL_3].level * 0.10f; // 쾌속
-        b.extraAtkChance+= hero.talents[TAL_4].level * 4.0f;  // 치명적 기습
-        b.evasionBonus  += hero.talents[TAL_5].level * 0.05f; // 야성
+        b.atkSpeedBonus += hero.talents[TAL_3].level * 0.12f; // 쾌속
+        b.defenseBonus  -= hero.talents[TAL_3].level * 0.03f; // 쾌속 디버프
+        b.defensePenBonus= hero.talents[TAL_4].level * 0.05f; // 치명적 기습 (방어관통)
+        b.evasionBonus  -= hero.talents[TAL_4].level * 0.03f; // 치명적 기습 디버프
+        b.stealChance    = hero.talents[TAL_5].level * 5.0f;  // 소매치기
         break;
     default:
         break;
@@ -330,10 +340,13 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
 
     TalentBonuses tal = ComputeTalentBonuses(hero);
 
-    // 플레이어 체력 — 스테이지에 따라 소폭 성장 + 계승 보너스 + 2차 특성 보너스
-    long long maxHp = (long long)(PlayerBaseMaxHp(hero.dungeon.stage) * (1.0f + tal.hpBonus + legacyFrac));
+    // 플레이어 체력 — 스테이지에 따라 소폭 성장 + 계승 보너스
+    long long maxHp = (long long)(PlayerBaseMaxHp(hero.dungeon.stage) * (1.0f + legacyFrac));
     hero.playerMaxHp = maxHp;
     if (hero.playerHp <= 0 || hero.playerHp > maxHp) hero.playerHp = maxHp;
+    // 불굴의 의지(전사 2차) — 체력이 이 틱 시작 시점에 50% 이하면 방어력에 조건부로 가산
+    bool lowHp = hero.playerHp <= maxHp / 2;
+    float condDefenseBonus = lowHp ? tal.conditionalDefenseBonus : 0.0f;
 
     // 던전 전투 — 클래스별 공격 방식
     // 공격력 기반값은 몹보다 느리게 스테이지를 따라 성장하고, 그 위에
@@ -344,7 +357,9 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
                          + tal.atkBonus;
     // 공격속도 — 데미지를 곱해 늘리는 게 아니라 "한 틱에 몇 번 때리는지"를 결정함.
     // 정수 부분만큼 추가 공격이 확정되고, 소수 부분은 그 확률로 한 번 더 때림.
-    float atkSpeedBonus = GetEquippedBonus(hero.inventory, StatType::AtkSpeed) + tal.atkSpeedBonus;
+    // 수호자/쾌속처럼 공격속도를 깎는 디버프가 있어서 음수가 될 수 있는데, 0 밑으로
+    // 내려가면 numAttacks가 0이 되어 아예 못 때리게 되는 걸 막기 위해 0으로 클램프.
+    float atkSpeedBonus = std::max(0.0f, GetEquippedBonus(hero.inventory, StatType::AtkSpeed) + tal.atkSpeedBonus);
     long long baseAtk = (long long)(PlayerBaseAtk(hero.dungeon.stage) * atkMult);
     long long totalDmg = 0;
     switch (hero.playerClass) {
@@ -356,12 +371,13 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
         }
         break;
     case CLASS_MAGE: {
-        float critChance = std::min(100.0f, 20.0f + tal.critChanceBonus); // 마력 폭주
-        float critMult    = 4.0f + tal.critDmgBonus;                      // 마나 증폭
+        float critChance = std::min(100.0f, 20.0f + tal.critChanceBonus); // 마력 폭주 + 마나 코어
+        float critMult    = std::max(1.0f, 4.0f + tal.critDmgBonus);      // 마나 증폭 + 원소 폭발 - 마나 코어
+        float normalMult  = std::max(0.1f, 0.7f + tal.normalDmgBonus);    // 원소 폭발 디버프
         std::uniform_real_distribution<float> critRoll(0.0f, 100.0f);
         totalDmg = (critRoll(g_rng) <= critChance)
-                   ? (long long)(baseAtk * critMult)  // 폭발 데미지
-                   : (long long)(baseAtk * 0.7f);      // 일반
+                   ? (long long)(baseAtk * critMult)   // 폭발 데미지
+                   : (long long)(baseAtk * normalMult); // 일반
         break;
     }
     case CLASS_ROGUE:
@@ -389,7 +405,9 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
         if (procRoll(g_rng) <= tal.extraAtkChance) totalDmg += perHitDmg;
     }
 
+    // 방어관통(치명적 기습, 도적 2차) — 적 방어력을 일정 비율 무시하고 계산.
     long long enemyDef = EnemyDefForStage(hero.dungeon.stage);
+    enemyDef = (long long)(enemyDef * (1.0f - std::min(0.9f, tal.defensePenBonus)));
     totalDmg = std::max(0LL, totalDmg - enemyDef);
     hero.dungeon.enemyHp -= totalDmg;
 
@@ -414,6 +432,17 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
         }
     }
 
+    // 소매치기(도적 2차) — 공격이 실제로 들어간 틱마다 확률적으로 골드를 더 훔치거나,
+    // 실패하면 반동으로 자기 체력이 깎임 (완전 무해한 보너스가 아니라 도박형 트레이드오프).
+    if (totalDmg > 0 && tal.stealChance > 0.0f) {
+        std::uniform_real_distribution<float> stealRoll(0.0f, 100.0f);
+        if (stealRoll(g_rng) <= tal.stealChance) {
+            hero.gold += (long long)(goldGain * 0.5f);
+        } else {
+            hero.playerHp = std::max(0LL, hero.playerHp - (long long)(maxHp * 0.02f));
+        }
+    }
+
     if (hero.dungeon.enemyHp <= 0) {
         long long reward   = hero.dungeon.stage * 10LL * (hero.dungeon.bossStage ? 3 : 1);
         long long xpReward = hero.dungeon.stage * 5LL;
@@ -434,10 +463,15 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
     }
 
     // 적 반격 — 방어력/체력흡수 투자가 부족하면 죽어서 전투가 리셋됨 (스테이지는 유지)
-    long long playerDef = (long long)(PlayerBaseDef(hero.dungeon.stage) * (1.0f + GetEquippedBonus(hero.inventory, StatType::Defense) + tal.defenseBonus + legacyFrac));
+    // 쾌속(도적) 디버프로 defenseBonus가 음수가 될 수 있어서 배율 자체가 뒤집히지
+    // 않게 최소 0.1배로 클램프.
+    float defMult = std::max(0.1f, 1.0f + GetEquippedBonus(hero.inventory, StatType::Defense) + tal.defenseBonus + condDefenseBonus + legacyFrac);
+    long long playerDef = (long long)(PlayerBaseDef(hero.dungeon.stage) * defMult);
     long long enemyAtk   = EnemyAtkForStage(hero.dungeon.stage);
     long long dmgToPlayer = MitigateDamage(enemyAtk, playerDef);
-    dmgToPlayer = (long long)(dmgToPlayer * (1.0f - std::min(0.9f, tal.evasionBonus))); // 은신 회피
+    dmgToPlayer = (long long)(dmgToPlayer * (1.0f + tal.dmgTakenBonus)); // 받는 피해 증가(광전사 디버프)
+    // 치명적 기습 디버프로 evasionBonus가 음수면 오히려 더 맞게 됨(의도된 동작) — 회피 상한만 90%로 클램프.
+    dmgToPlayer = (long long)(dmgToPlayer * std::max(0.0f, 1.0f - std::min(0.9f, tal.evasionBonus)));
     hero.playerHp -= dmgToPlayer;
     if (hero.playerHp <= 0) {
         hero.playerHp = hero.playerMaxHp;

@@ -109,7 +109,7 @@ bool TryEquip(Inventory& inv, int itemIdx) {
 void Unequip(Inventory& inv, int equipIdx) {
     if (equipIdx < 0 || equipIdx >= (int)inv.equipped.size()) return;
     // 인벤토리 꽉 찼으면 장착 해제 불가 (자리 먼저 확보)
-    if ((int)inv.items.size() >= Inventory::MAX_ITEMS) return;
+    if ((int)inv.items.size() >= MaxItems(inv)) return;
     inv.items.push_back(inv.equipped[equipIdx]);
     inv.equipped.erase(inv.equipped.begin() + equipIdx);
 }
@@ -117,6 +117,34 @@ void Unequip(Inventory& inv, int equipIdx) {
 void DeleteItem(Inventory& inv, int itemIdx) {
     if (itemIdx < 0 || itemIdx >= (int)inv.items.size()) return;
     inv.items.erase(inv.items.begin() + itemIdx);
+}
+
+int MaxItems(const Inventory& inv) {
+    return Inventory::MAX_ITEMS + inv.bagExpandCount * Inventory::BAG_EXPAND_SLOTS;
+}
+
+bool ExpandBag(Inventory& inv) {
+    if (inv.bagExpandCount >= Inventory::MAX_BAG_EXPANSIONS) return false;
+    inv.bagExpandCount++;
+    return true;
+}
+
+bool AutoCraftTick(Inventory& inv) {
+    bool craftedAny = false;
+    const Grade order[] = { Grade::Common, Grade::Rare, Grade::Epic };
+    for (Grade g : order) {
+        int cnt = 0;
+        for (const Item& it : inv.items) if (it.grade == g) cnt++;
+        if (cnt < 3) continue;
+        int removed = 0;
+        for (int i = (int)inv.items.size() - 1; i >= 0 && removed < 3; i--) {
+            if (inv.items[i].grade == g) { inv.items.erase(inv.items.begin() + i); removed++; }
+        }
+        // 재료 3개 제거 후 결과 1개 추가 = 순감소 2칸이라 항상 자리가 남음(공간 체크 불필요).
+        inv.items.push_back(CraftItem(g));
+        craftedAny = true;
+    }
+    return craftedAny;
 }
 
 // 등급이 높을수록 리롤 비용도 커짐 (희귀도에 비례)
@@ -139,7 +167,7 @@ float GetEquippedBonus(const Inventory& inv, StatType stat) {
 }
 
 // ---- 저장 / 불러오기 ---------------------------------------------------------
-// 포맷: "g s | g s | ..." (보관함) "/ g s | ..." (장착)
+// 포맷: "g s r | ..." (보관함) "/ g s r | ..." (장착) "/ 확장횟수"
 std::string SerializeInventory(const Inventory& inv) {
     std::ostringstream oss;
     auto write = [&](const std::vector<Item>& list) {
@@ -151,12 +179,14 @@ std::string SerializeInventory(const Inventory& inv) {
     write(inv.items);
     oss << '/';
     write(inv.equipped);
+    oss << '/' << inv.bagExpandCount;
     return oss.str();
 }
 
 void DeserializeInventory(const std::string& data, Inventory& inv) {
     inv.items.clear();
     inv.equipped.clear();
+    inv.bagExpandCount = 0;
 
     auto parse = [](const std::string& chunk, std::vector<Item>& out) {
         if (chunk.empty()) return;
@@ -173,8 +203,18 @@ void DeserializeInventory(const std::string& data, Inventory& inv) {
         }
     };
 
-    auto slash = data.find('/');
-    if (slash == std::string::npos) return;
-    parse(data.substr(0, slash),      inv.items);
-    parse(data.substr(slash + 1),     inv.equipped);
+    auto slash1 = data.find('/');
+    if (slash1 == std::string::npos) return;
+    parse(data.substr(0, slash1), inv.items);
+
+    auto slash2 = data.find('/', slash1 + 1);
+    std::string equippedChunk = (slash2 == std::string::npos) ? data.substr(slash1 + 1) : data.substr(slash1 + 1, slash2 - slash1 - 1);
+    parse(equippedChunk, inv.equipped);
+
+    // 구버전 세이브는 확장횟수 필드가 없었으니 그때는 그냥 0으로 둠(기본값).
+    if (slash2 != std::string::npos) {
+        int expand = 0;
+        if (sscanf(data.c_str() + slash2 + 1, "%d", &expand) == 1)
+            inv.bagExpandCount = std::clamp(expand, 0, Inventory::MAX_BAG_EXPANSIONS);
+    }
 }

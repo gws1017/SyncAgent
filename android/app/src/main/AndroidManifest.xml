@@ -37,6 +37,12 @@
             </intent-filter>
         </activity>
 
+        <!-- AdMob 앱 ID — 지금은 구글이 공개한 테스트용 앱 ID. 실제 출시 전에
+             AdMob 콘솔에서 발급받은 진짜 앱 ID로 교체해야 함(design_backlog.md 참고). -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
+
         <service
             android:name="com.syncagent.SyncService"
             android:foregroundServiceType="dataSync"

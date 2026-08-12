@@ -2,6 +2,7 @@
 #include "equipment.h"
 #include "lang.h"
 #include "cloud_sync.h"
+#include "platform.h"
 #include "imgui.h"
 #ifdef _WIN32
 #include "imgui_impl_win32.h"
@@ -561,7 +562,7 @@ static void TabEquipment(GameState& state) {
     ImGui::Spacing();
 
     // ---- 보관함 -------------------------------------------------------------
-    ImGui::TextDisabled(T("보관함  (%d / %d)", "Bag  (%d / %d)"), (int)inv.items.size(), Inventory::MAX_ITEMS);
+    ImGui::TextDisabled(T("보관함  (%d / %d)", "Bag  (%d / %d)"), (int)inv.items.size(), MaxItems(inv));
     ImGui::Separator();
 
     if (inv.items.empty()) {
@@ -651,11 +652,44 @@ static void TabEquipment(GameState& state) {
                 }
             }
             Item result = CraftItem(rule.from);
-            if ((int)inv.items.size() < Inventory::MAX_ITEMS)
+            if ((int)inv.items.size() < MaxItems(inv))
                 inv.items.push_back(result);
         }
         if (!canCraft) ImGui::EndDisabled();
     }
+
+#ifndef _WIN32
+    // ---- 광고 보상 (모바일 전용) ---------------------------------------------
+    // PC는 세이브가 모바일과 동기화되므로, PC에 공짜 획득 경로를 주면 모바일
+    // 광고 자체가 무의미해짐 — 그래서 이 두 기능은 안드로이드에서만 얻을 수
+    // 있음(획득한 상태는 세이브 동기화로 PC에서도 정상적으로 누릴 수 있음).
+    ImGui::Spacing();
+    ImGui::TextDisabled("%s", T("광고 보상", "Ad Rewards"));
+    ImGui::Separator();
+
+    bool autoCraftOn = IsAutoCraftActive(activeHero, state.totalRunSec);
+    if (autoCraftOn) {
+        double remainSec = activeHero.autoCraftUntilSec - state.totalRunSec;
+        int remainMin = (int)(remainSec / 60.0);
+        ImGui::Text(T("자동합성 작동 중 — 남은 시간 %d분", "Auto-craft active - %d min left"), remainMin);
+        ImGui::SameLine();
+        if (ImGui::SmallButton(T("광고 보고 갱신", "Refresh (watch ad)")))
+            PlatformRequestRewardedAd((int)AdRewardType::AutoCraft);
+    } else {
+        if (ImGui::Button(T("광고 보고 자동합성 켜기 (3시간)", "Watch ad: enable auto-craft (3h)")))
+            PlatformRequestRewardedAd((int)AdRewardType::AutoCraft);
+    }
+
+    bool canExpand = inv.bagExpandCount < Inventory::MAX_BAG_EXPANSIONS;
+    char expandLabel[80];
+    snprintf(expandLabel, sizeof(expandLabel),
+             T("광고 보고 보관함 확장 +%d칸 (%d/%d)", "Watch ad: +%d bag slots (%d/%d)"),
+             Inventory::BAG_EXPAND_SLOTS, inv.bagExpandCount, Inventory::MAX_BAG_EXPANSIONS);
+    if (!canExpand) ImGui::BeginDisabled();
+    if (ImGui::Button(expandLabel))
+        PlatformRequestRewardedAd((int)AdRewardType::BagExpand);
+    if (!canExpand) ImGui::EndDisabled();
+#endif
 }
 
 static void TabDungeon(GameState& state) {

@@ -110,6 +110,44 @@ static void PostEventNotification(const std::wstring& text, bool privacyMode) {
     vm->DetachCurrentThread();
 }
 
+// JNI: 리워드 광고 시청 요청 — MainActivity.showRewardedAd(int)을 호출해서 실제
+// 광고를 띄운다. 여기선 그냥 "보여줘"만 요청하고, 시청 완료 보상은 비동기로
+// 오기 때문에(광고 SDK 콜백은 안드로이드 UI 스레드에서 옴) PollAdRewards()에서
+// 매 프레임 폴링해서 받는다.
+void PlatformRequestRewardedAd(int rewardType) {
+    if (!g_App) return;
+    JavaVM* vm = g_App->activity->vm;
+    JNIEnv* env = nullptr;
+    if (vm->AttachCurrentThread(&env, nullptr) != JNI_OK) return;
+    jclass cls = env->GetObjectClass(g_App->activity->clazz);
+    jmethodID mid = env->GetMethodID(cls, "showRewardedAd", "(I)V");
+    if (mid) env->CallVoidMethod(g_App->activity->clazz, mid, (jint)rewardType);
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    vm->DetachCurrentThread();
+}
+
+// JNI: 완료된 광고 보상 폴링. Kotlin의 pollAdReward()는 pollUnicodeChar()와 같은
+// 패턴 — 대기 중인 보상이 없으면 0, 있으면 (AdRewardType + 1)을 반환하고 비움
+// (0을 "큐 비어있음" 신호로 쓰기 위해 +1 오프셋).
+static void PollAdRewards() {
+    if (!g_App || g_state.activeHero < 0) return;
+    JavaVM* vm = g_App->activity->vm;
+    JNIEnv* env = nullptr;
+    if (vm->AttachCurrentThread(&env, nullptr) != JNI_OK) return;
+    jclass cls = env->GetObjectClass(g_App->activity->clazz);
+    jmethodID mid = env->GetMethodID(cls, "pollAdReward", "()I");
+    if (mid) {
+        jint reward;
+        while ((reward = env->CallIntMethod(g_App->activity->clazz, mid)) != 0) {
+            Hero& hero = g_state.Active();
+            if (reward - 1 == (int)AdRewardType::AutoCraft)      GrantAutoCraftBuff(hero, g_state.totalRunSec);
+            else if (reward - 1 == (int)AdRewardType::BagExpand) ExpandBag(hero.inventory);
+            SaveGame(g_state); // 보상은 즉시 저장(다음 세이브 틱까지 기다리다 유실되면 안 됨)
+        }
+    }
+    vm->DetachCurrentThread();
+}
+
 static void Init(struct android_app* app) {
     if (g_Initialized) return;
     g_App = app;
@@ -333,6 +371,7 @@ static void MainLoopStep() {
     if (io.WantTextInput && !wantTextLast) ShowSoftKeyboard();
     wantTextLast = io.WantTextInput;
     PollUnicodeChars();
+    PollAdRewards();
 
     // 프레임 렌더
     ImGui_ImplOpenGL3_NewFrame();

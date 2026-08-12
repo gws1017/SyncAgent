@@ -128,6 +128,10 @@ struct Hero {
 
     int prestigeCount = 0; // 이 영웅이 계승(프레스티지)한 횟수
 
+    // 자동합성 버프(모바일 광고 보상 전용) — state.totalRunSec이 이 값보다 작은 동안
+    // 매 틱 자동합성이 실행됨. 0이면 비활성. GrantAutoCraftBuff()로 부여.
+    double autoCraftUntilSec = 0.0;
+
     Dungeon   dungeon;
     Inventory inventory;
 
@@ -183,7 +187,12 @@ bool         PurchaseUpgrade(Hero& hero, int id);
 void         InitTalentsForClass(Hero& hero);
 bool         InvestTalent(Hero& hero, int id);
 TalentBonuses ComputeTalentBonuses(const Hero& hero);
-std::wstring GameTick(Hero& hero, float legacyBonusPct);
+std::wstring GameTick(Hero& hero, float legacyBonusPct, double totalRunSec);
+
+// ---- 모바일 전용 광고 보상 (PC는 세이브가 동기화되므로 획득 경로를 안 줌) ------
+// 자동합성 버프 3시간 부여(재시청 시 잔여시간 리필, 스택 안 됨).
+void         GrantAutoCraftBuff(Hero& hero, double totalRunSec);
+bool         IsAutoCraftActive(const Hero& hero, double totalRunSec);
 
 // ---- 로스터 / 계승 ----------------------------------------------------------
 bool         CreateOrSwitchHero(GameState& state, ClassType cls); // 없으면 새로 생성, 있으면 전환

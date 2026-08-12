@@ -16,6 +16,13 @@ import android.view.inputmethod.InputMethodManager
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.google.android.gms.ads.AdError
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.FullScreenContentCallback
+import com.google.android.gms.ads.LoadAdError
+import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.rewarded.RewardedAd
+import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import java.util.concurrent.LinkedBlockingQueue
 
 class MainActivity : NativeActivity() {
@@ -49,6 +56,9 @@ class MainActivity : NativeActivity() {
         createEventChannel()
         startSyncService()
         CloudSync.init(this)
+
+        MobileAds.initialize(this) {}
+        loadRewardedAd()
     }
 
     fun showSoftInput() {
@@ -150,4 +160,51 @@ class MainActivity : NativeActivity() {
     // 호출해서 UI를 그 아래로 밀어낸다. 뷰가 아직 레이아웃되기 전이면 0을 반환하며,
     // 리스너가 갱신하고 나면 다음 호출부터 정상 값이 잡힌다.
     fun getSafeInsetTopPx(): Int = cachedSafeInsetTop
+
+    // ---- 리워드 광고 (자동합성 버프 / 보관함 확장, PlatformRewardType 참고) --------
+    // 지금은 구글이 공개한 테스트용 광고 단위 ID. 실제 출시 전에 AdMob 콘솔에서
+    // 발급받은 진짜 광고 단위 ID로 교체해야 함(docs/design_backlog.md 참고).
+    private val rewardedAdUnitId = "ca-app-pub-3940256099942544/5224354917"
+    private var rewardedAd: RewardedAd? = null
+    private val adRewardQueue = LinkedBlockingQueue<Int>()
+
+    private fun loadRewardedAd() {
+        RewardedAd.load(this, rewardedAdUnitId, AdRequest.Builder().build(),
+            object : RewardedAdLoadCallback() {
+                override fun onAdLoaded(ad: RewardedAd) { rewardedAd = ad }
+                override fun onAdFailedToLoad(error: LoadAdError) { rewardedAd = null }
+            })
+    }
+
+    // 네이티브(PlatformRequestRewardedAd)가 광고 시청을 요청할 때 호출.
+    // rewardType은 game.h의 AdRewardType과 값이 같음(0=자동합성, 1=보관함 확장).
+    fun showRewardedAd(rewardType: Int) {
+        runOnUiThread {
+            val ad = rewardedAd
+            if (ad == null) {
+                // 아직 로드가 안 됐으면 이번 요청은 그냥 무시하고 다음을 위해 다시 로드 시도
+                // (유저 입장에선 버튼을 눌렀는데 반응이 없는 것처럼 보일 수 있음 — 로드
+                // 완료 후 재시도하도록 UI에서 안내하는 건 추후 개선 여지).
+                loadRewardedAd()
+                return@runOnUiThread
+            }
+            ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                override fun onAdDismissedFullScreenContent() {
+                    rewardedAd = null
+                    loadRewardedAd()
+                }
+                override fun onAdFailedToShowFullScreenContent(error: AdError) {
+                    rewardedAd = null
+                    loadRewardedAd()
+                }
+            }
+            ad.show(this) { _ ->
+                // 0을 "대기 중인 보상 없음"으로 쓰기 위해 +1 오프셋 (pollUnicodeChar와 같은 패턴)
+                adRewardQueue.offer(rewardType + 1)
+            }
+        }
+    }
+
+    // 네이티브(PollAdRewards)가 매 프레임 폴링 — pollUnicodeChar()와 같은 패턴.
+    fun pollAdReward(): Int = adRewardQueue.poll() ?: 0
 }

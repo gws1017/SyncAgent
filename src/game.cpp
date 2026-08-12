@@ -301,7 +301,15 @@ void ResetAll(GameState& state) {
     state.language         = lang;
 }
 
-std::wstring GameTick(Hero& hero, float legacyBonusPct) {
+void GrantAutoCraftBuff(Hero& hero, double totalRunSec) {
+    hero.autoCraftUntilSec = totalRunSec + 3.0 * 3600.0; // 3시간, 재시청 시 리필(스택 안 됨)
+}
+
+bool IsAutoCraftActive(const Hero& hero, double totalRunSec) {
+    return hero.autoCraftUntilSec > 0.0 && totalRunSec < hero.autoCraftUntilSec;
+}
+
+std::wstring GameTick(Hero& hero, float legacyBonusPct, double totalRunSec) {
     if (hero.dungeon.enemyMaxHp == 0)
         InitDungeonStage(hero.dungeon);
 
@@ -520,7 +528,7 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
     if (roll(g_rng) <= dropChance) {
         Item dropped = MakeItem(RollDropGrade(hero.dungeon.stage));
         wchar_t buf[80];
-        if ((int)hero.inventory.items.size() < Inventory::MAX_ITEMS) {
+        if ((int)hero.inventory.items.size() < MaxItems(hero.inventory)) {
             hero.inventory.items.push_back(dropped);
             // %ls를 씀 — 와이드 printf(swprintf)에서 %s는 플랫폼마다 동작이 갈림
             // (MSVC는 wchar_t*로 받아주지만 안드로이드 Bionic libc는 표준대로
@@ -540,12 +548,17 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct) {
         }
     }
 
+    // 자동합성 버프(모바일 광고 보상) — 살아있는 동안 매 틱 자동 실행.
+    // 결과/성공률은 수동 합성과 완전히 동일, 그냥 손으로 안 눌러도 되게 해주는 편의 기능.
+    if (IsAutoCraftActive(hero, totalRunSec))
+        AutoCraftTick(hero.inventory);
+
     return notify;
 }
 
 std::wstring GameTick(GameState& state) {
     if (state.activeHero < 0) return L"";
-    return GameTick(state.Active(), state.legacyBonusPct);
+    return GameTick(state.Active(), state.legacyBonusPct, state.totalRunSec);
 }
 
 // ---- 저장 / 불러오기 ---------------------------------------------------------
@@ -586,6 +599,7 @@ static void WriteHero(std::string& out, int idx, const Hero& hero) {
     WriteKV(out, K("talentPoints"), (long long)hero.talentPoints);
     WriteKV(out, K("talentPoints2"), (long long)hero.talentPoints2);
     WriteKV(out, K("deathCount"), hero.deathCount);
+    WriteKV(out, K("autoCraftUntilSec"), hero.autoCraftUntilSec);
 
     int upLevels[UP_COUNT];
     for (int i = 0; i < UP_COUNT; i++) upLevels[i] = hero.upgrades[i].level;
@@ -675,6 +689,7 @@ static void ReadHero(const std::map<std::string, std::string>& kv, int idx, Hero
     hero.talentPoints   = (int)KVLL(kv, K("talentPoints"), 0);
     hero.talentPoints2  = (int)KVLL(kv, K("talentPoints2"), 0);
     hero.deathCount      = KVLL(kv, K("deathCount"), 0);
+    hero.autoCraftUntilSec = KVDouble(kv, K("autoCraftUntilSec"), 0.0);
 
     InitUpgrades(hero);
     InitTalentsForClass(hero);

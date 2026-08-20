@@ -550,8 +550,12 @@ static int32_t handleInputEvent(struct android_app* app, AInputEvent* event) {
                         g_touchIsScroll = true;
                 }
                 if (g_touchIsScroll) {
+                    // 손가락 위로 드래그(dy<0)하면 콘텐츠가 손가락을 따라 위로 올라가서
+                    // 아래쪽 내용이 보여야 함(터치스크린 표준 관성) — 마우스 휠 부호와는
+                    // 반대라 부호를 뒤집지 않고 그대로 씀(원래 -dy였는데 반대로 느껴진다는
+                    // 피드백으로 수정).
                     float dy = y - g_touchLastY;
-                    io.AddMouseWheelEvent(0.0f, -dy / kTouchScrollPixelsPerWheelUnit);
+                    io.AddMouseWheelEvent(0.0f, dy / kTouchScrollPixelsPerWheelUnit);
                     g_touchLastY = y;
                     return 1; // 스크롤 중엔 위치 갱신을 안 보내서 버튼 호버/클릭이 안 걸리게 함
                 }

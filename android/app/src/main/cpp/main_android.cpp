@@ -148,6 +148,63 @@ static void PollAdRewards() {
     vm->DetachCurrentThread();
 }
 
+// JNI: Google 계정 연동 요청 — MainActivity.requestGoogleLink()를 호출해서 로그인
+// 화면을 띄운다. 결과는 비동기로 오므로(로그인 액티비티가 끝나야 앎)
+// PollGoogleLinkResult()에서 매 프레임 폴링해서 받는다.
+void PlatformRequestGoogleLink() {
+    if (!g_App) return;
+    JavaVM* vm = g_App->activity->vm;
+    JNIEnv* env = nullptr;
+    if (vm->AttachCurrentThread(&env, nullptr) != JNI_OK) return;
+    jclass cls = env->GetObjectClass(g_App->activity->clazz);
+    jmethodID mid = env->GetMethodID(cls, "requestGoogleLink", "()V");
+    if (mid) env->CallVoidMethod(g_App->activity->clazz, mid);
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    vm->DetachCurrentThread();
+}
+
+// JNI: 완료된 Google 로그인 결과 폴링. Kotlin의 pollGoogleLinkResult()는 빈
+// 문자열이면 "아직 없음", "__FAILED__"면 로그인 실패, 그 외엔 계정 고유 ID
+// (그대로 동기화 코드로 씀). 성공하면 그 코드로 클라우드에서 기존 세이브를
+// 받아오거나(있으면 그대로 교체), 없으면 지금 로컬 세이브를 올리고 최초
+// 연동 보상을 준다 — dashboard.cpp의 수동 "지금 다운로드" 버튼과 같은 로직.
+static void PollGoogleLinkResult() {
+    if (!g_App) return;
+    JavaVM* vm = g_App->activity->vm;
+    JNIEnv* env = nullptr;
+    if (vm->AttachCurrentThread(&env, nullptr) != JNI_OK) return;
+    jclass cls = env->GetObjectClass(g_App->activity->clazz);
+    jmethodID mid = env->GetMethodID(cls, "pollGoogleLinkResult", "()Ljava/lang/String;");
+    if (mid) {
+        jstring jresult = (jstring)env->CallObjectMethod(g_App->activity->clazz, mid);
+        if (jresult) {
+            const char* chars = env->GetStringUTFChars(jresult, nullptr);
+            std::string code(chars);
+            env->ReleaseStringUTFChars(jresult, chars);
+            env->DeleteLocalRef(jresult);
+
+            if (!code.empty() && code != "__FAILED__") {
+                CloudSetCode(code);
+                std::string downloaded;
+                CloudSyncResult dl = CloudDownload(code, downloaded);
+                GameState fresh{};
+                if (dl.ok && DeserializeGameState(downloaded, fresh)) {
+                    g_state = fresh; // 기존에 이 계정으로 저장된 세이브가 있으면 그대로 교체
+                    g_lang = (g_state.language == 1) ? Lang::EN : Lang::KO;
+                } else {
+                    CloudUpload(code, SerializeGameState(g_state)); // 새 계정이면 지금 세이브를 올림
+                }
+                g_state.googleLinked = true;
+                GrantGoogleLinkReward(g_state);
+                SaveGame(g_state);
+            } else if (code == "__FAILED__") {
+                LOGE("PollGoogleLinkResult: Google sign-in failed");
+            }
+        }
+    }
+    vm->DetachCurrentThread();
+}
+
 static void Init(struct android_app* app) {
     if (g_Initialized) return;
     g_App = app;
@@ -347,6 +404,11 @@ static void WriteWidgetInfo() {
 // 5초마다 게임 틱 — 창(EGL)이 없어도, 즉 앱이 백그라운드로 내려가 있어도 호출된다.
 // (포그라운드 서비스가 프로세스를 살려두는 동안 android_main 루프 자체는 계속 돌기 때문에
 //  방치형 게임의 핵심인 "안 보고 있어도 자란다"가 성립한다.)
+// Google 계정 연동 중이면 이 주기마다 클라우드에 조용히 자동 업로드 — 매 틱(5초)마다
+// 하면 네트워크 낭비라 훨씬 느슨한 주기로 함(수동 코드 동기화와 달리 유저가 신경 안 써도 됨).
+static constexpr float CLOUD_AUTO_UPLOAD_SEC = 120.0f;
+static std::chrono::steady_clock::time_point g_lastCloudUpload;
+
 static void TickIfDue() {
     auto now = Clock::now();
     if (std::chrono::duration<float>(now - g_lastTick).count() < TICK_SEC)
@@ -360,6 +422,14 @@ static void TickIfDue() {
     SyncBackgroundEnabledIfChanged();
     if (!evt.empty())
         PostEventNotification(evt, g_state.disguiseMode);
+
+    if (g_state.googleLinked &&
+        std::chrono::duration<float>(now - g_lastCloudUpload).count() >= CLOUD_AUTO_UPLOAD_SEC) {
+        g_lastCloudUpload = now;
+        std::string code = CloudGetSavedCode();
+        if (!code.empty())
+            CloudUpload(code, SerializeGameState(g_state));
+    }
 }
 
 static void MainLoopStep() {
@@ -372,6 +442,7 @@ static void MainLoopStep() {
     wantTextLast = io.WantTextInput;
     PollUnicodeChars();
     PollAdRewards();
+    PollGoogleLinkResult();
 
     // 프레임 렌더
     ImGui_ImplOpenGL3_NewFrame();

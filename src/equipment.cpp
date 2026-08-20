@@ -120,7 +120,7 @@ void DeleteItem(Inventory& inv, int itemIdx) {
 }
 
 int MaxItems(const Inventory& inv) {
-    return Inventory::MAX_ITEMS + inv.bagExpandCount * Inventory::BAG_EXPAND_SLOTS;
+    return Inventory::MAX_ITEMS + inv.bagExpandCount * Inventory::BAG_EXPAND_SLOTS + inv.bonusSlots;
 }
 
 bool ExpandBag(Inventory& inv) {
@@ -167,7 +167,7 @@ float GetEquippedBonus(const Inventory& inv, StatType stat) {
 }
 
 // ---- 저장 / 불러오기 ---------------------------------------------------------
-// 포맷: "g s r | ..." (보관함) "/ g s r | ..." (장착) "/ 확장횟수"
+// 포맷: "g s r | ..." (보관함) "/ g s r | ..." (장착) "/ 확장횟수" "/ 보너스칸수"
 std::string SerializeInventory(const Inventory& inv) {
     std::ostringstream oss;
     auto write = [&](const std::vector<Item>& list) {
@@ -180,6 +180,7 @@ std::string SerializeInventory(const Inventory& inv) {
     oss << '/';
     write(inv.equipped);
     oss << '/' << inv.bagExpandCount;
+    oss << '/' << inv.bonusSlots;
     return oss.str();
 }
 
@@ -187,6 +188,7 @@ void DeserializeInventory(const std::string& data, Inventory& inv) {
     inv.items.clear();
     inv.equipped.clear();
     inv.bagExpandCount = 0;
+    inv.bonusSlots = 0;
 
     auto parse = [](const std::string& chunk, std::vector<Item>& out) {
         if (chunk.empty()) return;
@@ -211,10 +213,11 @@ void DeserializeInventory(const std::string& data, Inventory& inv) {
     std::string equippedChunk = (slash2 == std::string::npos) ? data.substr(slash1 + 1) : data.substr(slash1 + 1, slash2 - slash1 - 1);
     parse(equippedChunk, inv.equipped);
 
-    // 구버전 세이브는 확장횟수 필드가 없었으니 그때는 그냥 0으로 둠(기본값).
+    // 구버전 세이브는 확장횟수/보너스칸수 필드가 없었으니 그때는 그냥 0으로 둠(기본값).
     if (slash2 != std::string::npos) {
-        int expand = 0;
-        if (sscanf(data.c_str() + slash2 + 1, "%d", &expand) == 1)
-            inv.bagExpandCount = std::clamp(expand, 0, Inventory::MAX_BAG_EXPANSIONS);
+        int expand = 0, bonus = 0;
+        int n = sscanf(data.c_str() + slash2 + 1, "%d/%d", &expand, &bonus);
+        if (n >= 1) inv.bagExpandCount = std::clamp(expand, 0, Inventory::MAX_BAG_EXPANSIONS);
+        if (n >= 2) inv.bonusSlots = std::max(0, bonus);
     }
 }

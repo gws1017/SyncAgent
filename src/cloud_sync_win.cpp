@@ -17,8 +17,8 @@
 // TODO: 프로젝트 고유 값. 다른 사람이 이 레포를 포크해서 쓰려면 자기 Firebase
 // 프로젝트 값으로 바꿔야 한다 (apiKey는 클라이언트에 노출돼도 되는 값 — 보안은
 // Realtime Database 규칙으로 건다).
-static const wchar_t* kApiKey      = L"AIzaSyAqvLIdwydpMnW2faZ3vF9A9slUFVLPaVY";
-static const wchar_t* kDbHost      = L"syncagent-c5fbc-default-rtdb.firebaseio.com";
+static const wchar_t* kApiKey      = L"AIzaSyB7Gw5rdhsvit2ZTX-MCfdEGZ-0ukqx-fM";
+static const wchar_t* kDbHost      = L"syncagent-20804-default-rtdb.firebaseio.com";
 static const wchar_t* kIdentityHost = L"identitytoolkit.googleapis.com";
 static const wchar_t* kTokenHost    = L"securetoken.googleapis.com";
 

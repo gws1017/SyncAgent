@@ -23,11 +23,16 @@ import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import java.util.concurrent.LinkedBlockingQueue
 
 class MainActivity : NativeActivity() {
     companion object {
         const val EVENT_CHANNEL_ID = "sync_events"
+        private const val RC_GOOGLE_SIGN_IN = 4210
     }
 
     // 카메라 펀치홀/노치의 상단 안전 영역 높이. 리스너로 UI 스레드에서만 갱신하고
@@ -162,17 +167,26 @@ class MainActivity : NativeActivity() {
     fun getSafeInsetTopPx(): Int = cachedSafeInsetTop
 
     // ---- 리워드 광고 (자동합성 버프 / 보관함 확장, PlatformRewardType 참고) --------
-    // 지금은 구글이 공개한 테스트용 광고 단위 ID. 실제 출시 전에 AdMob 콘솔에서
-    // 발급받은 진짜 광고 단위 ID로 교체해야 함(docs/design_backlog.md 참고).
-    private val rewardedAdUnitId = "ca-app-pub-3940256099942544/5224354917"
+    // 실제 발급받은 리워드 광고 단위 ID (2026-07-24 반영).
+    private val rewardedAdUnitId = "ca-app-pub-9449282163176205/7676053849"
     private var rewardedAd: RewardedAd? = null
     private val adRewardQueue = LinkedBlockingQueue<Int>()
 
     private fun loadRewardedAd() {
+        android.util.Log.i("SyncAgent", "loadRewardedAd: requesting...")
         RewardedAd.load(this, rewardedAdUnitId, AdRequest.Builder().build(),
             object : RewardedAdLoadCallback() {
-                override fun onAdLoaded(ad: RewardedAd) { rewardedAd = ad }
-                override fun onAdFailedToLoad(error: LoadAdError) { rewardedAd = null }
+                override fun onAdLoaded(ad: RewardedAd) {
+                    android.util.Log.i("SyncAgent", "loadRewardedAd: loaded OK")
+                    rewardedAd = ad
+                }
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    // 원인 파악용 — code/message/domain을 꼭 로그로 남겨야 어디서 막혔는지 앎
+                    // (신규 계정 심사 대기, 결제 프로필 미완료, 광고 단위 전파 지연 등 다양함).
+                    android.util.Log.e("SyncAgent",
+                        "loadRewardedAd: FAILED code=${error.code} domain=${error.domain} msg=${error.message}")
+                    rewardedAd = null
+                }
             })
     }
 
@@ -185,6 +199,7 @@ class MainActivity : NativeActivity() {
                 // 아직 로드가 안 됐으면 이번 요청은 그냥 무시하고 다음을 위해 다시 로드 시도
                 // (유저 입장에선 버튼을 눌렀는데 반응이 없는 것처럼 보일 수 있음 — 로드
                 // 완료 후 재시도하도록 UI에서 안내하는 건 추후 개선 여지).
+                android.util.Log.w("SyncAgent", "showRewardedAd: not loaded yet, retrying load")
                 loadRewardedAd()
                 return@runOnUiThread
             }
@@ -194,6 +209,7 @@ class MainActivity : NativeActivity() {
                     loadRewardedAd()
                 }
                 override fun onAdFailedToShowFullScreenContent(error: AdError) {
+                    android.util.Log.e("SyncAgent", "showRewardedAd: FAILED TO SHOW code=${error.code} msg=${error.message}")
                     rewardedAd = null
                     loadRewardedAd()
                 }
@@ -207,4 +223,41 @@ class MainActivity : NativeActivity() {
 
     // 네이티브(PollAdRewards)가 매 프레임 폴링 — pollUnicodeChar()와 같은 패턴.
     fun pollAdReward(): Int = adRewardQueue.poll() ?: 0
+
+    // ---- Google 계정 연동 (클라우드 세이브 자동 동기화, PlatformRequestGoogleLink 참고) ----
+    // Firebase Realtime Database 규칙은 "인증만 됐으면"(auth != null) 아무 코드든
+    // 읽고 쓸 수 있게 돼 있어서(익명 인증도 인정), Google 계정 idToken을 따로
+    // Firebase에 교환할 필요 없이 계정 고유 ID를 그대로 동기화 코드로 쓸 수 있다
+    // — 기존 CloudSync의 익명 인증/코드 시스템을 그대로 재사용.
+    private val googleLinkResultQueue = LinkedBlockingQueue<String>()
+    private val googleSignInClient: GoogleSignInClient by lazy {
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestEmail()
+            .build()
+        GoogleSignIn.getClient(this, gso)
+    }
+
+    // 네이티브(PlatformRequestGoogleLink)가 연동 버튼 눌렀을 때 호출 — 로그인 화면 띄움.
+    fun requestGoogleLink() {
+        runOnUiThread {
+            startActivityForResult(googleSignInClient.signInIntent, RC_GOOGLE_SIGN_IN)
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != RC_GOOGLE_SIGN_IN) return
+        try {
+            val account = GoogleSignIn.getSignedInAccountFromIntent(data).getResult(ApiException::class.java)
+            val id = account?.id
+            googleLinkResultQueue.offer(if (id.isNullOrEmpty()) "__FAILED__" else id)
+        } catch (e: ApiException) {
+            android.util.Log.e("SyncAgent", "Google sign-in failed: code=${e.statusCode}")
+            googleLinkResultQueue.offer("__FAILED__")
+        }
+    }
+
+    // 네이티브(PollGoogleLinkResult)가 매 프레임 폴링. 빈 문자열 = 아직 없음,
+    // "__FAILED__" = 로그인 실패, 그 외 = 계정 고유 ID(동기화 코드로 그대로 씀).
+    fun pollGoogleLinkResult(): String = googleLinkResultQueue.poll() ?: ""
 }

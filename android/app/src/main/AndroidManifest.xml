@@ -37,11 +37,11 @@
             </intent-filter>
         </activity>
 
-        <!-- AdMob 앱 ID — 지금은 구글이 공개한 테스트용 앱 ID. 실제 출시 전에
-             AdMob 콘솔에서 발급받은 진짜 앱 ID로 교체해야 함(design_backlog.md 참고). -->
+        <!-- AdMob 앱 ID (실제 발급받은 값, 2026-07-24 반영). 광고 단위 ID는 아직
+             테스트용(MainActivity.kt) — 리워드 광고 단위 만들고 나면 그것도 교체 필요. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
+            android:value="ca-app-pub-9449282163176205~3852213116" />
 
         <service
             android:name="com.syncagent.SyncService"

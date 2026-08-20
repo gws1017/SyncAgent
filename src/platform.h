@@ -16,4 +16,9 @@ enum class AdRewardType { AutoCraft = 0, BagExpand = 1 };
 // 리워드 광고 시청을 요청 — 실제 보상 지급은 비동기 콜백(main_android.cpp의
 // 매 프레임 폴링)에서 이뤄짐, 이 함수는 그냥 "보여줘" 요청만 던짐.
 void PlatformRequestRewardedAd(int rewardType);
+
+// Google 계정 연동(모바일 전용) — 로그인 화면을 띄우는 요청만 던짐. 성공하면
+// main_android.cpp가 계정 고유 ID를 동기화 코드로 써서 자동 업로드/다운로드하고,
+// 최초 연동이면 GrantGoogleLinkReward()로 보상을 준다.
+void PlatformRequestGoogleLink();
 #endif

@@ -309,6 +309,13 @@ bool IsAutoCraftActive(const Hero& hero, double totalRunSec) {
     return hero.autoCraftUntilSec > 0.0 && totalRunSec < hero.autoCraftUntilSec;
 }
 
+void GrantGoogleLinkReward(GameState& state) {
+    if (state.googleLinkRewardClaimed) return; // 1회 한정
+    state.googleLinkRewardClaimed = true;
+    if (state.activeHero >= 0)
+        state.Active().inventory.bonusSlots += Inventory::GOOGLE_LINK_BONUS_SLOTS;
+}
+
 std::wstring GameTick(Hero& hero, float legacyBonusPct, double totalRunSec) {
     if (hero.dungeon.enemyMaxHp == 0)
         InitDungeonStage(hero.dungeon);
@@ -622,6 +629,8 @@ std::string SerializeGameState(const GameState& state) {
     WriteKV(out, "language", (long long)(int)g_lang);
     WriteKV(out, "disguiseMode", (long long)(state.disguiseMode ? 1 : 0));
     WriteKV(out, "backgroundEnabled", (long long)(state.backgroundEnabled ? 1 : 0));
+    WriteKV(out, "googleLinked", (long long)(state.googleLinked ? 1 : 0));
+    WriteKV(out, "googleLinkRewardClaimed", (long long)(state.googleLinkRewardClaimed ? 1 : 0));
 
     for (int i = 0; i < GameState::ROSTER_SIZE; i++)
         WriteHero(out, i, state.heroes[i]);
@@ -765,6 +774,8 @@ bool DeserializeGameState(const std::string& text, GameState& state) {
     g_lang = (state.language == 1) ? Lang::EN : Lang::KO;
     state.disguiseMode = KVLL(kv, "disguiseMode", 0) != 0;
     state.backgroundEnabled = KVLL(kv, "backgroundEnabled", 1) != 0;
+    state.googleLinked = KVLL(kv, "googleLinked", 0) != 0;
+    state.googleLinkRewardClaimed = KVLL(kv, "googleLinkRewardClaimed", 0) != 0;
 
     bool isRosterFormat = kv.find("activeHero") != kv.end();
     if (!isRosterFormat) {

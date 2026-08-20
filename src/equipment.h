@@ -15,12 +15,14 @@ struct Item {
 struct Inventory {
     static constexpr int MAX_ITEMS          = 20;
     static constexpr int MAX_EQUIP          = 5;
-    static constexpr int BAG_EXPAND_SLOTS   = 2; // 확장 1회당 추가되는 칸 수
-    static constexpr int MAX_BAG_EXPANSIONS = 5; // 확장 가능한 최대 횟수 (모바일 광고 전용)
+    static constexpr int BAG_EXPAND_SLOTS   = 5; // 확장 1회당 추가되는 칸 수
+    static constexpr int MAX_BAG_EXPANSIONS = 3; // 확장 가능한 최대 횟수 (모바일 광고 전용)
+    static constexpr int GOOGLE_LINK_BONUS_SLOTS = 5; // 계정 연동 최초 1회 보상 칸 수
 
     std::vector<Item> items;   // 보관함
     std::vector<Item> equipped; // 장착 중 (최대 MAX_EQUIP)
-    int bagExpandCount = 0;     // 지금까지 확장한 횟수
+    int bagExpandCount = 0;     // 지금까지 확장한 횟수(광고)
+    int bonusSlots     = 0;     // 계정 연동 등 1회성 보상 칸 수(광고 확장 한도와 무관)
 };
 
 // 합성: grade 등급 아이템 3개 소모 → 결과 아이템 반환

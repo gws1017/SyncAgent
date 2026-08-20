@@ -167,6 +167,13 @@ struct GameState {
     // 기본값은 켜짐(방치형 게임의 핵심 동작 유지).
     bool backgroundEnabled = true;
 
+    // Google 계정 연동(모바일 전용, docs/design_backlog.md 참고) — 연동되면 계정
+    // 고유 ID를 클라우드 동기화 코드로 그대로 써서 코드 직접 관리 없이 자동
+    // 업로드/다운로드됨. googleLinkRewardClaimed는 최초 연동 보상(보관함 +5칸)을
+    // 한 번만 지급하기 위한 플래그 — 재연동해도 다시 안 줌.
+    bool googleLinked            = false;
+    bool googleLinkRewardClaimed = false;
+
     Hero&       Active()       { return heroes[activeHero]; }
     const Hero& Active() const { return heroes[activeHero]; }
 };
@@ -193,6 +200,8 @@ std::wstring GameTick(Hero& hero, float legacyBonusPct, double totalRunSec);
 // 자동합성 버프 3시간 부여(재시청 시 잔여시간 리필, 스택 안 됨).
 void         GrantAutoCraftBuff(Hero& hero, double totalRunSec);
 bool         IsAutoCraftActive(const Hero& hero, double totalRunSec);
+// Google 계정 최초 연동 보상(보관함 +5칸) — 이미 받았으면 아무 것도 안 함(1회 한정).
+void         GrantGoogleLinkReward(GameState& state);
 
 // ---- 로스터 / 계승 ----------------------------------------------------------
 bool         CreateOrSwitchHero(GameState& state, ClassType cls); // 없으면 새로 생성, 있으면 전환

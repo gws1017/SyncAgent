@@ -64,4 +64,6 @@ dependencies {
     implementation "androidx.core:core-ktx:1.13.1"
     // 리워드 광고(자동합성 버프 / 보관함 확장) — docs/design_backlog.md 참고
     implementation "com.google.android.gms:play-services-ads:23.3.0"
+    // Google 계정 연동(클라우드 세이브 자동 동기화) — docs/design_backlog.md 참고
+    implementation "com.google.android.gms:play-services-auth:21.2.0"
 }

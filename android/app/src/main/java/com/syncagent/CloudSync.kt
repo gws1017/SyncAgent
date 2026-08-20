@@ -13,8 +13,8 @@ import java.net.URL
 // 네이티브(C++)에서 JNI로 이 객체의 메서드를 직접 호출하지 않고 MainActivity의
 // 얇은 래퍼를 통해 부른다 (JNI가 개별 오브젝트를 못 찾으므로 activity 인스턴스 경유).
 object CloudSync {
-    private const val API_KEY = "AIzaSyAqvLIdwydpMnW2faZ3vF9A9slUFVLPaVY"
-    private const val DB_HOST = "syncagent-c5fbc-default-rtdb.firebaseio.com"
+    private const val API_KEY = "AIzaSyB7Gw5rdhsvit2ZTX-MCfdEGZ-0ukqx-fM"
+    private const val DB_HOST = "syncagent-20804-default-rtdb.firebaseio.com"
 
     private lateinit var codeFile: File
     private lateinit var authFile: File

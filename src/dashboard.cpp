@@ -286,11 +286,10 @@ static void TabOptions(GameState& state) {
 
     ImGui::TextDisabled("%s", T("클라우드 동기화 (PC / 모바일)", "Cloud sync (PC / mobile)"));
 
-#ifndef _WIN32
-    // ---- Google 계정 연동 (모바일 전용, 권장 경로) ---------------------------
+    // ---- Google 계정 연동 (권장 경로, PC/모바일 둘 다 지원) --------------------
     // 연동하면 계정 고유 ID를 동기화 코드로 그대로 써서 코드 직접 관리 없이
-    // 자동으로 업로드/다운로드됨(main_android.cpp의 주기적 업로드 참고). PC는
-    // Google 로그인이 없어서 아래 수동 코드 입력 방식으로만 페어링 가능.
+    // 자동으로 업로드/다운로드됨. 안드로이드는 앱 안에서 바로 로그인, PC는
+    // 시스템 브라우저가 열리고 로그인 후 다시 앱으로 돌아옴(로컬 루프백 방식).
     if (state.googleLinked) {
         ImGui::TextColored({0.4f, 0.9f, 0.5f, 1.0f}, "%s", T("Google 계정 연동됨 (자동 동기화 중)", "Google account linked (auto-syncing)"));
     } else {
@@ -300,8 +299,7 @@ static void TabOptions(GameState& state) {
             PlatformRequestGoogleLink();
     }
     ImGui::Spacing();
-    ImGui::TextDisabled("%s", T("PC와 페어링하려면 아래 코드를 PC에 직접 입력하세요", "To pair with PC, enter the code below on PC"));
-#endif
+    ImGui::TextDisabled("%s", T("다른 기기와 페어링하려면 아래 코드를 그 기기에 직접 입력하세요", "To pair with another device, enter the code below there"));
 
     if (savedCode.empty()) {
         ImGui::TextWrapped("%s", T("동기화 코드가 없습니다. 새로 만들거나, 다른 기기에서 만든 코드를 입력하세요.",

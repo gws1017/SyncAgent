@@ -42,3 +42,6 @@ android/captures/
 *.jks
 android/keystore.properties
 android/upload-keystore.jks
+
+# Google OAuth 데스크톱 클라이언트 ID/secret (PC Google 로그인용, google_auth_win.cpp가 include)
+src/google_auth_secrets.h

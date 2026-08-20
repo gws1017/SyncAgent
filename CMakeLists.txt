@@ -14,6 +14,7 @@ add_executable(syncagent WIN32
     src/dashboard.cpp
     src/platform_win.cpp
     src/cloud_sync_win.cpp
+    src/google_auth_win.cpp
     src/lang.cpp
     src/app.rc
     ${IMGUI_DIR}/imgui.cpp
@@ -38,6 +39,7 @@ target_link_libraries(syncagent PRIVATE
     dxgi
     d3dcompiler
     winhttp
+    ws2_32
 )
 
 target_compile_definitions(syncagent PRIVATE UNICODE _UNICODE)

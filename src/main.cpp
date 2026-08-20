@@ -2,6 +2,8 @@
 #include "game.h"
 #include "tray.h"
 #include "dashboard.h"
+#include "platform.h"
+#include "cloud_sync.h"
 
 static constexpr UINT WM_TRAY    = WM_APP + 1;
 static constexpr UINT TIMER_TICK = 1;
@@ -38,6 +40,40 @@ static void SyncTrayIconIfChanged() {
     }
 }
 
+// Google 계정 연동(google_auth_win.cpp) 완료 결과를 매 틱마다 논블로킹으로 확인.
+// 안드로이드의 PollGoogleLinkResult()와 동일한 로직 — dashboard.cpp의 수동
+// "지금 다운로드" 버튼과도 같은 방식(기존 세이브 있으면 교체, 없으면 업로드).
+static void PollGoogleLinkResultIfAny() {
+    std::string code;
+    if (!PlatformPollGoogleLinkResult(code)) return;
+    if (code.empty() || code == "__FAILED__") return;
+
+    CloudSetCode(code);
+    std::string downloaded;
+    CloudSyncResult dl = CloudDownload(code, downloaded);
+    GameState fresh{};
+    if (dl.ok && DeserializeGameState(downloaded, fresh)) {
+        g_state = fresh; // 이미 이 계정으로 저장된 세이브가 있으면 그대로 교체
+    } else {
+        CloudUpload(code, SerializeGameState(g_state)); // 새 계정이면 지금 세이브를 올림
+    }
+    g_state.googleLinked = true;
+    GrantGoogleLinkReward(g_state);
+    SaveGame(g_state);
+}
+
+// Google 계정 연동 중이면 이 주기마다 클라우드에 조용히 자동 업로드(안드로이드와 동일 주기).
+static constexpr double CLOUD_AUTO_UPLOAD_SEC = 120.0;
+static double g_lastCloudUploadRunSec = 0.0;
+static void AutoUploadIfLinked() {
+    if (!g_state.googleLinked) return;
+    if (g_state.totalRunSec - g_lastCloudUploadRunSec < CLOUD_AUTO_UPLOAD_SEC) return;
+    g_lastCloudUploadRunSec = g_state.totalRunSec;
+    std::string code = CloudGetSavedCode();
+    if (!code.empty())
+        CloudUpload(code, SerializeGameState(g_state));
+}
+
 static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_TIMER:
@@ -53,6 +89,8 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             UpdateTrayTooltip();
             SyncTrayIconIfChanged();
+            PollGoogleLinkResultIfAny();
+            AutoUploadIfLinked();
         }
         return 0;
 

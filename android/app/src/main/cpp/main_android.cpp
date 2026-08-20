@@ -14,6 +14,7 @@
 #include <GLES3/gl3.h>
 #include <chrono>
 #include <string>
+#include <random>
 
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  "SyncAgent", __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "SyncAgent", __VA_ARGS__)
@@ -148,6 +149,41 @@ static void PollAdRewards() {
     vm->DetachCurrentThread();
 }
 
+// 세션 소유권 체크용 랜덤 ID — 이 프로세스가 살아있는 동안만 유효(재시작마다 새로 생성).
+// 같은 계정(코드)으로 다른 기기에서 로그인하면 클라우드의 activeSession 값이
+// 바뀌어서, 여기 담긴 값과 달라지는 순간 이 세션이 밀려난 걸 알 수 있다.
+static std::string g_mySessionId;
+
+static std::string GenerateSessionId() {
+    std::mt19937_64 rng(std::random_device{}());
+    char buf[17];
+    snprintf(buf, sizeof(buf), "%016llx", (unsigned long long)rng());
+    return buf;
+}
+
+// 로그인 직후 또는(이미 연동된 상태로) 앱을 새로 켰을 때 호출 — 내 세션 ID로
+// 클라우드 소유권을 덮어써서 "내가 최신"이라고 주장한다(다른 기기가 켜져 있었다면 밀어냄).
+static void ClaimCloudSessionIfLinked() {
+    if (!g_state.googleLinked) return;
+    std::string code = CloudGetSavedCode();
+    if (code.empty()) return;
+    g_mySessionId = GenerateSessionId();
+    CloudClaimSession(code, g_mySessionId);
+}
+
+// JNI: 다른 기기에 세션을 뺏겼을 때 MainActivity.showKickedAndExit() 호출 —
+// 토스트 띄우고 프로세스를 완전히 종료시킨다.
+static void ShowKickedAndExit() {
+    if (!g_App) return;
+    JavaVM* vm = g_App->activity->vm;
+    JNIEnv* env = nullptr;
+    if (vm->AttachCurrentThread(&env, nullptr) != JNI_OK) return;
+    jclass cls = env->GetObjectClass(g_App->activity->clazz);
+    jmethodID mid = env->GetMethodID(cls, "showKickedAndExit", "()V");
+    if (mid) env->CallVoidMethod(g_App->activity->clazz, mid);
+    vm->DetachCurrentThread();
+}
+
 // JNI: Google 계정 연동 요청 — MainActivity.requestGoogleLink()를 호출해서 로그인
 // 화면을 띄운다. 결과는 비동기로 오므로(로그인 액티비티가 끝나야 앎)
 // PollGoogleLinkResult()에서 매 프레임 폴링해서 받는다.
@@ -197,6 +233,7 @@ static void PollGoogleLinkResult() {
                 g_state.googleLinked = true;
                 GrantGoogleLinkReward(g_state);
                 SaveGame(g_state);
+                ClaimCloudSessionIfLinked(); // 방금 연동했으니 세션 소유권도 바로 주장
             } else if (code == "__FAILED__") {
                 LOGE("PollGoogleLinkResult: Google sign-in failed");
             }
@@ -427,8 +464,22 @@ static void TickIfDue() {
         std::chrono::duration<float>(now - g_lastCloudUpload).count() >= CLOUD_AUTO_UPLOAD_SEC) {
         g_lastCloudUpload = now;
         std::string code = CloudGetSavedCode();
-        if (!code.empty())
-            CloudUpload(code, SerializeGameState(g_state));
+        if (!code.empty()) {
+            // 업로드 전에 세션 소유권부터 확인 — 다른 기기가 나중에 로그인해서 내
+            // 세션을 가져갔으면(같은 계정 동시 사용 시 세이브가 갈라지는 것 방지)
+            // 토스트 띄우고 완전 종료.
+            bool kicked = false;
+            if (!g_mySessionId.empty()) {
+                std::string remoteSession;
+                CloudSyncResult chk = CloudGetActiveSession(code, remoteSession);
+                if (chk.ok && !remoteSession.empty() && remoteSession != g_mySessionId) {
+                    ShowKickedAndExit();
+                    kicked = true;
+                }
+            }
+            if (!kicked)
+                CloudUpload(code, SerializeGameState(g_state));
+        }
     }
 }
 
@@ -575,6 +626,7 @@ void android_main(struct android_app* app) {
     CloudSyncAndroidInit(app);
     g_widgetPath = std::string(app->activity->internalDataPath) + "/widget.txt";
     LoadGame(g_state);
+    ClaimCloudSessionIfLinked(); // 이미 연동돼 있었으면 이번 실행이 새 활성 세션이라고 주장(다른 기기 밀어냄)
     g_lastTick = Clock::now();
 
     app->onAppCmd     = handleAppCmd;

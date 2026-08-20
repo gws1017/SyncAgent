@@ -23,6 +23,14 @@ CloudSyncResult CloudUpload(const std::string& code, const std::string& saveText
 // 클라우드에서 세이브를 받아옴 — 성공하면 outText에 세이브 텍스트가 채워짐
 CloudSyncResult CloudDownload(const std::string& code, std::string& outText);
 
+// 세션 소유권 — 같은 계정(코드)으로 여러 기기를 동시에 켜놓으면 세이브가
+// last-write-wins로 서로 덮어써서 갈라지는 문제 대응. 로그인/앱 시작 시 내
+// 세션 ID로 클라우드 값을 덮어써서 "내가 최신 활성 세션"이라고 주장하고,
+// 주기적 업로드 때마다 그 값이 아직 내 세션 ID인지 확인해서, 다른 기기가
+// 나중에 로그인해 가져갔으면 스스로 종료한다(나중에 로그인한 쪽이 항상 이김).
+void            CloudClaimSession(const std::string& code, const std::string& sessionId);
+CloudSyncResult CloudGetActiveSession(const std::string& code, std::string& outSessionId);
+
 #ifndef _WIN32
 struct android_app; // android_native_app_glue.h를 여기서 끌어오지 않기 위한 전방 선언
 // android_main()에서 한 번 호출 — JNI 호출에 필요한 android_app*를 등록한다.

@@ -160,6 +160,22 @@ class MainActivity : NativeActivity() {
     fun cloudSetCode(code: String) { CloudSync.setCode(code) }
     fun cloudUpload(code: String, saveText: String): String = CloudSync.upload(code, saveText)
     fun cloudDownload(code: String): String = CloudSync.download(code)
+    fun cloudClaimSession(code: String, sessionId: String) { CloudSync.claimSession(code, sessionId) }
+    fun cloudGetActiveSession(code: String): String = CloudSync.getActiveSession(code)
+
+    // 세션 소유권 체크(PollGoogleLinkResult/TickIfDue)에서 다른 기기가 같은 계정으로
+    // 로그인해 내 세션을 가져간 걸 발견했을 때 호출 — 알림 띄우고 완전 종료.
+    fun showKickedAndExit() {
+        runOnUiThread {
+            android.widget.Toast.makeText(this,
+                "다른 기기에서 같은 계정으로 로그인되어 이 세션은 종료됩니다.",
+                android.widget.Toast.LENGTH_LONG).show()
+        }
+        Thread {
+            Thread.sleep(2000) // 토스트가 화면에 보일 시간을 준 뒤 종료
+            android.os.Process.killProcess(android.os.Process.myPid())
+        }.start()
+    }
 
     // 카메라 펀치홀/노치가 차지하는 상단 안전 영역 높이(실제 픽셀). 네이티브가 주기적으로
     // 호출해서 UI를 그 아래로 밀어낸다. 뷰가 아직 레이아웃되기 전이면 0을 반환하며,

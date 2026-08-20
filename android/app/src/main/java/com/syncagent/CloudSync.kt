@@ -142,4 +142,30 @@ object CloudSync {
             "ERR\n응답 파싱 실패"
         }
     }
+
+    // 세션 소유권 — 같은 계정으로 여러 기기를 동시에 켜놓으면 세이브가 last-write-wins로
+    // 갈라지는 문제 대응. activeSession 경로는 세이브 본문(state)과 별개라 가볍게 자주
+    // 확인해도 전체 세이브를 매번 안 받아도 됨.
+    fun claimSession(code: String, sessionId: String) {
+        val auth = ensureAuth() ?: return
+        httpRequest(
+            "https://$DB_HOST/syncs/$code/activeSession.json?auth=${auth.idToken}",
+            "PUT", "\"$sessionId\"", "application/json"
+        )
+    }
+
+    // 반환: "OK\n<세션ID>"(없으면 빈 문자열) 또는 "ERR\n<메시지>"
+    fun getActiveSession(code: String): String {
+        val auth = ensureAuth() ?: return "ERR\n로그인 실패 (네트워크 확인)"
+        val (status, body) = httpRequest(
+            "https://$DB_HOST/syncs/$code/activeSession.json?auth=${auth.idToken}",
+            "GET", null, "application/json"
+        )
+        if (status !in 200..299) return "ERR\n요청 실패 ($status)"
+        val trimmed = body.trim()
+        return if (trimmed.length >= 2 && trimmed.startsWith("\"") && trimmed.endsWith("\""))
+            "OK\n" + trimmed.substring(1, trimmed.length - 1)
+        else
+            "OK\n" // null이거나 형식이 다르면 빈 값 취급
+    }
 }

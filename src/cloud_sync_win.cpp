@@ -295,3 +295,33 @@ CloudSyncResult CloudDownload(const std::string& code, std::string& outText) {
     res.message = "다운로드 완료";
     return res;
 }
+
+void CloudClaimSession(const std::string& code, const std::string& sessionId) {
+    if (code.empty()) return;
+    AuthState auth;
+    if (!EnsureAuth(auth)) return;
+    std::wstring wcode(code.begin(), code.end());
+    std::wstring path = L"/syncs/" + wcode + L"/activeSession.json?auth=" + std::wstring(auth.idToken.begin(), auth.idToken.end());
+    std::string body = "\"" + JsonEscapeString(sessionId) + "\"";
+    HttpsRequest(kDbHost, path, L"PUT", body, L"application/json");
+}
+
+CloudSyncResult CloudGetActiveSession(const std::string& code, std::string& outSessionId) {
+    CloudSyncResult res;
+    if (code.empty()) { res.message = "동기화 코드가 없습니다"; return res; }
+    AuthState auth;
+    if (!EnsureAuth(auth)) { res.message = "로그인 실패 (네트워크 확인)"; return res; }
+
+    std::wstring wcode(code.begin(), code.end());
+    std::wstring path = L"/syncs/" + wcode + L"/activeSession.json?auth=" + std::wstring(auth.idToken.begin(), auth.idToken.end());
+    HttpResult r = HttpsRequest(kDbHost, path, L"GET", "", L"application/json");
+    if (!r.ok) { res.message = "요청 실패 (" + std::to_string(r.status) + ")"; return res; }
+
+    // 값이 아예 없으면 Firebase가 "null"을 그대로 반환함(따옴표 없음).
+    if (r.body.size() >= 2 && r.body.front() == '"' && r.body.back() == '"')
+        outSessionId = JsonUnescapeString(r.body.substr(1, r.body.size() - 2));
+    else
+        outSessionId.clear();
+    res.ok = true;
+    return res;
+}

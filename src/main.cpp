@@ -4,6 +4,7 @@
 #include "dashboard.h"
 #include "platform.h"
 #include "cloud_sync.h"
+#include <random>
 
 static constexpr UINT WM_TRAY    = WM_APP + 1;
 static constexpr UINT TIMER_TICK = 1;
@@ -40,6 +41,28 @@ static void SyncTrayIconIfChanged() {
     }
 }
 
+// 세션 소유권 체크용 랜덤 ID — 이 프로세스가 살아있는 동안만 유효(재시작마다 새로 생성).
+// 같은 계정(코드)으로 다른 기기에서 로그인하면 클라우드의 activeSession 값이
+// 바뀌어서, 여기 담긴 값과 달라지는 순간 이 세션이 밀려난 걸 알 수 있다.
+static std::string g_mySessionId;
+
+static std::string GenerateSessionId() {
+    std::mt19937_64 rng(std::random_device{}());
+    char buf[17];
+    snprintf(buf, sizeof(buf), "%016llx", (unsigned long long)rng());
+    return buf;
+}
+
+// 로그인 직후 또는(이미 연동된 상태로) 앱을 새로 켰을 때 호출 — 내 세션 ID로
+// 클라우드 소유권을 덮어써서 "내가 최신"이라고 주장한다(다른 기기가 켜져 있었다면 밀어냄).
+static void ClaimCloudSessionIfLinked() {
+    if (!g_state.googleLinked) return;
+    std::string code = CloudGetSavedCode();
+    if (code.empty()) return;
+    g_mySessionId = GenerateSessionId();
+    CloudClaimSession(code, g_mySessionId);
+}
+
 // Google 계정 연동(google_auth_win.cpp) 완료 결과를 매 틱마다 논블로킹으로 확인.
 // 안드로이드의 PollGoogleLinkResult()와 동일한 로직 — dashboard.cpp의 수동
 // "지금 다운로드" 버튼과도 같은 방식(기존 세이브 있으면 교체, 없으면 업로드).
@@ -60,18 +83,33 @@ static void PollGoogleLinkResultIfAny() {
     g_state.googleLinked = true;
     GrantGoogleLinkReward(g_state);
     SaveGame(g_state);
+    ClaimCloudSessionIfLinked(); // 방금 연동했으니 세션 소유권도 바로 주장
 }
 
 // Google 계정 연동 중이면 이 주기마다 클라우드에 조용히 자동 업로드(안드로이드와 동일 주기).
+// 업로드 전에 세션 소유권부터 확인 — 다른 기기가 나중에 로그인해서 내 세션을
+// 가져갔으면(같은 계정 동시 사용 시 세이브가 갈라지는 것 방지) 알림 띄우고 종료.
 static constexpr double CLOUD_AUTO_UPLOAD_SEC = 120.0;
 static double g_lastCloudUploadRunSec = 0.0;
-static void AutoUploadIfLinked() {
+static void AutoUploadIfLinked(HWND hwnd) {
     if (!g_state.googleLinked) return;
     if (g_state.totalRunSec - g_lastCloudUploadRunSec < CLOUD_AUTO_UPLOAD_SEC) return;
     g_lastCloudUploadRunSec = g_state.totalRunSec;
     std::string code = CloudGetSavedCode();
-    if (!code.empty())
-        CloudUpload(code, SerializeGameState(g_state));
+    if (code.empty()) return;
+
+    if (!g_mySessionId.empty()) {
+        std::string remoteSession;
+        CloudSyncResult chk = CloudGetActiveSession(code, remoteSession);
+        if (chk.ok && !remoteSession.empty() && remoteSession != g_mySessionId) {
+            MessageBoxW(hwnd,
+                L"다른 기기에서 같은 계정으로 로그인되어 이 세션은 종료됩니다.",
+                L"Text RPG", MB_OK | MB_ICONWARNING);
+            DestroyWindow(hwnd); // 기존 종료 경로(WM_DESTROY)를 그대로 타서 정상적으로 정리하고 끝냄
+            return;
+        }
+    }
+    CloudUpload(code, SerializeGameState(g_state));
 }
 
 static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -90,7 +128,7 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             UpdateTrayTooltip();
             SyncTrayIconIfChanged();
             PollGoogleLinkResultIfAny();
-            AutoUploadIfLinked();
+            AutoUploadIfLinked(hwnd);
         }
         return 0;
 
@@ -138,6 +176,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
     // 있으면(기존 유저) LoadGame이 저장된 값으로 덮어써서 유저가 직접 끈 상태는 유지됨.
     g_state.disguiseMode = true;
     LoadGame(g_state);
+    ClaimCloudSessionIfLinked(); // 이미 연동돼 있었으면 이번 실행이 새 활성 세션이라고 주장(다른 기기 밀어냄)
 
     const wchar_t* cls = L"SyncAgentMsg";
     WNDCLASSW wc = {};

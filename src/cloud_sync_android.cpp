@@ -98,6 +98,48 @@ CloudSyncResult CloudUpload(const std::string& code, const std::string& saveText
     return res;
 }
 
+void CloudClaimSession(const std::string& code, const std::string& sessionId) {
+    JavaVM* vm; JNIEnv* env = AttachEnv(&vm);
+    if (!env) return;
+    jclass cls = env->GetObjectClass(g_androidApp->activity->clazz);
+    jmethodID mid = env->GetMethodID(cls, "cloudClaimSession", "(Ljava/lang/String;Ljava/lang/String;)V");
+    if (mid) {
+        jstring jcode = env->NewStringUTF(code.c_str());
+        jstring jsession = env->NewStringUTF(sessionId.c_str());
+        env->CallVoidMethod(g_androidApp->activity->clazz, mid, jcode, jsession);
+        env->DeleteLocalRef(jcode);
+        env->DeleteLocalRef(jsession);
+    }
+    vm->DetachCurrentThread();
+}
+
+CloudSyncResult CloudGetActiveSession(const std::string& code, std::string& outSessionId) {
+    CloudSyncResult res;
+    JavaVM* vm; JNIEnv* env = AttachEnv(&vm);
+    if (!env) { res.message = "JNI 연결 실패"; return res; }
+
+    jclass cls = env->GetObjectClass(g_androidApp->activity->clazz);
+    jmethodID mid = env->GetMethodID(cls, "cloudGetActiveSession", "(Ljava/lang/String;)Ljava/lang/String;");
+    if (mid) {
+        jstring jcode = env->NewStringUTF(code.c_str());
+        jstring jresult = (jstring)env->CallObjectMethod(g_androidApp->activity->clazz, mid, jcode);
+        if (jresult) {
+            const char* chars = env->GetStringUTFChars(jresult, nullptr);
+            std::string raw(chars);
+            env->ReleaseStringUTFChars(jresult, chars);
+            env->DeleteLocalRef(jresult);
+            bool ok; std::string rest;
+            SplitStatus(raw, ok, rest);
+            res.ok = ok;
+            if (ok) outSessionId = rest;
+            else    res.message = rest;
+        }
+        env->DeleteLocalRef(jcode);
+    }
+    vm->DetachCurrentThread();
+    return res;
+}
+
 CloudSyncResult CloudDownload(const std::string& code, std::string& outText) {
     CloudSyncResult res;
     JavaVM* vm; JNIEnv* env = AttachEnv(&vm);

@@ -451,6 +451,16 @@ static void TickIfDue() {
     if (std::chrono::duration<float>(now - g_lastTick).count() < TICK_SEC)
         return;
     g_lastTick = now;
+
+    // 첫 틱에서 딱 한 번만 — 이 시점엔 MainActivity.onCreate()가 확실히 끝나 있어서
+    // (다른 모든 JNI 호출도 여기서부터 안전하게 되는 것과 같은 이유) codeFile이
+    // lateinit 초기화 안 된 상태로 건드려서 크래시나는 걸 피할 수 있음.
+    static bool s_claimedOnce = false;
+    if (!s_claimedOnce) {
+        s_claimedOnce = true;
+        ClaimCloudSessionIfLinked();
+    }
+
     g_state.totalRunSec += TICK_SEC;
     std::wstring evt = GameTick(g_state);
     SaveGame(g_state);
@@ -626,7 +636,10 @@ void android_main(struct android_app* app) {
     CloudSyncAndroidInit(app);
     g_widgetPath = std::string(app->activity->internalDataPath) + "/widget.txt";
     LoadGame(g_state);
-    ClaimCloudSessionIfLinked(); // 이미 연동돼 있었으면 이번 실행이 새 활성 세션이라고 주장(다른 기기 밀어냄)
+    // 세션 소유권 주장(ClaimCloudSessionIfLinked)은 여기서 바로 안 부름 — 이 시점엔
+    // MainActivity.onCreate()(CloudSync.init() 호출)가 아직 안 끝났을 수 있어서
+    // codeFile이 초기화되기 전에 JNI로 건드리면 크래시남(lateinit property 예외).
+    // 다른 JNI 호출들처럼 TickIfDue()의 첫 틱에서 안전하게 한 번만 부름.
     g_lastTick = Clock::now();
 
     app->onAppCmd     = handleAppCmd;

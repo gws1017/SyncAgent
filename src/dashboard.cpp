@@ -178,7 +178,7 @@ static void TabStatus(GameState& state) {
     Hero& hero = state.Active();
     ImGui::Spacing();
 
-    ImGui::TextDisabled("TEXT RPG  v1.1.0");
+    ImGui::TextDisabled("TEXT RPG  v1.2.0");
     ImGui::Separator();
     ImGui::Spacing();
 

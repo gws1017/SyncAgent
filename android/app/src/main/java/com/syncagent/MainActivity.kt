@@ -246,10 +246,10 @@ class MainActivity : NativeActivity() {
     // Firebase에 교환할 필요 없이 계정 고유 ID를 그대로 동기화 코드로 쓸 수 있다
     // — 기존 CloudSync의 익명 인증/코드 시스템을 그대로 재사용.
     private val googleLinkResultQueue = LinkedBlockingQueue<String>()
+    // 이메일은 실제로 안 씀(계정 고유 ID만 코드로 사용) — 불필요한 개인정보
+    // 수집을 피하려고 requestEmail() 스코프는 요청하지 않음.
     private val googleSignInClient: GoogleSignInClient by lazy {
-        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestEmail()
-            .build()
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build()
         GoogleSignIn.getClient(this, gso)
     }
 
